@@ -71,7 +71,7 @@ export async function addItem(
     category_name?: string;
     image_url?: string | null;
   },
-  maxItems: number = 100
+  maxItems: number = 50
 ): Promise<{ success: boolean; item?: Item; error?: string }> {
   if (!orgId) return { success: false, error: "Organization ID is required" };
 
@@ -156,7 +156,7 @@ export async function addItem(
 export async function bulkAddItems(
   orgId: string,
   sampleProducts: SampleProduct[],
-  maxItems: number = 100
+  maxItems: number = 50
 ): Promise<{ added: number; error?: string }> {
   if (!orgId) return { added: 0, error: "Organization ID is required" };
 

@@ -7,7 +7,8 @@ import { Item, Category } from "@/lib/auth/types";
 import { fetchItems, addItem, bulkAddItems, deleteItem } from "@/lib/data/items";
 import { fetchCategories, addCategory } from "@/lib/data/categories";
 import { compressImageTo60KB } from "@/lib/utils/image-compressor";
-import { SAMPLE_50_PRODUCTS } from "@/lib/data/sample-products";
+import { SAMPLE_50_PRODUCTS, SampleProduct } from "@/lib/data/sample-products";
+import { downloadSampleExcelTemplate, parseExcelFile } from "@/lib/utils/excel-handler";
 import {
   Boxes,
   Plus,
@@ -26,7 +27,11 @@ import {
   ArrowRight,
   ExternalLink,
   SlidersHorizontal,
-  Info
+  Info,
+  Download,
+  FileSpreadsheet,
+  FileUp,
+  X
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -68,10 +73,17 @@ export default function ItemsPage() {
 
   // Bulk Upload Modal State
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkTab, setBulkTab] = useState<"excel" | "sample">("excel");
   const [isBulkUploading, setIsBulkUploading] = useState(false);
-  const [bulkFilter, setBulkFilter] = useState("");
 
-  const maxItemsLimit = organization?.items_count ?? 100;
+  // Excel Upload State
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
+  const [parsedExcelProducts, setParsedExcelProducts] = useState<SampleProduct[]>([]);
+  const [excelParseErrors, setExcelParseErrors] = useState<string[]>([]);
+  const excelInputRef = useRef<HTMLInputElement>(null);
+
+  const maxItemsLimit = organization?.items_count ?? 50;
   const currentCount = items.length;
   const isLimitReached = currentCount >= maxItemsLimit;
   const remainingQuota = Math.max(0, maxItemsLimit - currentCount);
@@ -140,6 +152,38 @@ export default function ItemsPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // Reset Excel Upload State
+  const resetExcelState = () => {
+    setExcelFile(null);
+    setParsedExcelProducts([]);
+    setExcelParseErrors([]);
+    if (excelInputRef.current) excelInputRef.current.value = "";
+  };
+
+  // Handle Excel File Selection & Parse
+  const handleExcelFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsParsingExcel(true);
+      setExcelFile(file);
+      setExcelParseErrors([]);
+      const result = await parseExcelFile(file);
+      setParsedExcelProducts(result.products);
+      setExcelParseErrors(result.errors);
+      if (result.products.length === 0 && result.errors.length > 0) {
+        setErrorMsg(result.errors[0]);
+      }
+    } catch (err: any) {
+      console.error("Excel parse error:", err);
+      setErrorMsg(err.message || "Could not parse Excel file. Please use valid .xlsx or .csv format.");
+      setParsedExcelProducts([]);
+    } finally {
+      setIsParsingExcel(false);
+    }
+  };
+
   // Handle Inline Category Creation
   const handleCreateInlineCategory = async () => {
     if (!organization?.id || !inlineCatName.trim()) return;
@@ -157,7 +201,7 @@ export default function ItemsPage() {
     }
   };
 
-  // Handle Add Item Submit
+  // Handle Add Single Item Submit
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization?.id) {
@@ -266,8 +310,42 @@ export default function ItemsPage() {
     }
   };
 
-  // Handle Bulk Upload of 50 items
-  const handleBulkUpload = async () => {
+  // Handle Upload of Parsed Excel Products
+  const handleUploadParsedExcel = async () => {
+    if (!organization?.id || parsedExcelProducts.length === 0) return;
+    if (isLimitReached) {
+      setErrorMsg(`Organization item limit of ${maxItemsLimit} reached. Cannot upload.`);
+      return;
+    }
+
+    try {
+      setIsBulkUploading(true);
+      setErrorMsg(null);
+      const res = await bulkAddItems(organization.id, parsedExcelProducts, maxItemsLimit);
+
+      if (res.added > 0) {
+        const [updatedItems, updatedCats] = await Promise.all([
+          fetchItems(organization.id),
+          fetchCategories(organization.id),
+        ]);
+        setItems(updatedItems);
+        setCategories(updatedCats);
+        setIsBulkModalOpen(false);
+        resetExcelState();
+        setSuccessMsg(`Successfully imported ${res.added} items from Excel!${res.error || ""}`);
+        setTimeout(() => setSuccessMsg(null), 5000);
+      } else {
+        setErrorMsg(res.error || "No items could be added.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Excel bulk upload failed.");
+    } finally {
+      setIsBulkUploading(false);
+    }
+  };
+
+  // Handle Bulk Upload of 50 sample products
+  const handleBulkUploadDemo = async () => {
     if (!organization?.id) return;
     if (isLimitReached) {
       setErrorMsg(`Organization item limit of ${maxItemsLimit} reached. Cannot bulk upload.`);
@@ -280,7 +358,6 @@ export default function ItemsPage() {
       const res = await bulkAddItems(organization.id, SAMPLE_50_PRODUCTS, maxItemsLimit);
 
       if (res.added > 0) {
-        // Refresh items and categories after bulk insert
         const [updatedItems, updatedCats] = await Promise.all([
           fetchItems(organization.id),
           fetchCategories(organization.id),
@@ -343,7 +420,18 @@ export default function ItemsPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Download Sample Template */}
+          <button
+            onClick={downloadSampleExcelTemplate}
+            title="Download formatted sample Excel template (.xlsx)"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="hidden md:inline">Download</span> Excel Template
+          </button>
+
+          {/* Bulk Upload Modal Trigger */}
           <button
             onClick={() => {
               setErrorMsg(null);
@@ -352,10 +440,11 @@ export default function ItemsPage() {
             disabled={isLimitReached}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <UploadCloud className="w-4 h-4 text-emerald-500" />
-            Bulk Upload (50 Items)
+            <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+            Bulk Upload
           </button>
 
+          {/* Add Item Modal Trigger */}
           <button
             onClick={() => {
               setErrorMsg(null);
@@ -485,17 +574,27 @@ export default function ItemsPage() {
             <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mt-1">
               {searchQuery
                 ? `No item matched your search "${searchQuery}".`
-                : `Add items individually with 60KB compressed images or one-click import 50 sample retail products.`}
+                : `Upload an Excel sheet, import sample products, or add items individually.`}
             </p>
             {!searchQuery && (
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <button
-                  onClick={() => setIsBulkModalOpen(true)}
+                  onClick={downloadSampleExcelTemplate}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-500" />
+                  Download Excel Template
+                </button>
+                <button
+                  onClick={() => {
+                    setBulkTab("excel");
+                    setIsBulkModalOpen(true);
+                  }}
                   disabled={isLimitReached}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
                 >
-                  <UploadCloud className="w-3.5 h-3.5 text-emerald-500" />
-                  Bulk Import 50 Products
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
+                  Upload Excel File
                 </button>
                 <button
                   onClick={() => {
@@ -503,7 +602,7 @@ export default function ItemsPage() {
                     setIsAddModalOpen(true);
                   }}
                   disabled={isLimitReached}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Add First Item
@@ -599,7 +698,7 @@ export default function ItemsPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* ADD ITEM MODAL                                                            */}
+      {/* ADD SINGLE ITEM MODAL                                                     */}
       {/* ========================================================================= */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
@@ -845,23 +944,23 @@ export default function ItemsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* BULK UPLOAD MODAL (50 RETAIL PRODUCTS)                                    */}
+      {/* BULK UPLOAD MODAL (EXCEL FILE & 50 RETAIL DEMO)                            */}
       {/* ========================================================================= */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
             {/* Modal Header */}
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                  <UploadCloud className="w-4 h-4" />
+                  <FileSpreadsheet className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    Bulk Upload 50 Retail Products
+                    Bulk Upload Products
                   </h3>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                    One-click sample catalog with auto-category provisioning
+                    Import via custom Excel spreadsheet (.xlsx, .csv) or sample catalog
                   </p>
                 </div>
               </div>
@@ -875,6 +974,34 @@ export default function ItemsPage() {
               </button>
             </div>
 
+            {/* Modal Tabs */}
+            <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 px-4">
+              <button
+                type="button"
+                onClick={() => setBulkTab("excel")}
+                className={`py-2.5 px-4 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+                  bulkTab === "excel"
+                    ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-zinc-900"
+                    : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                }`}
+              >
+                <FileUp className="w-3.5 h-3.5" />
+                Upload Excel / CSV File
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkTab("sample")}
+                className={`py-2.5 px-4 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+                  bulkTab === "sample"
+                    ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-zinc-900"
+                    : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                }`}
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                50 Ready-Made Demo SKUs
+              </button>
+            </div>
+
             {/* Modal Content */}
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
               {/* Organization Limits Banner */}
@@ -882,61 +1009,191 @@ export default function ItemsPage() {
                 <Info className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-zinc-700 dark:text-zinc-300 space-y-1">
                   <div className="font-semibold text-zinc-900 dark:text-zinc-100">
-                    Organization Multi-Tenancy & Limit Verification
+                    Organization Limit & Auto-Category Assignment
                   </div>
                   <div>
-                    Current inventory: <strong>{currentCount}</strong> / <strong>{maxItemsLimit}</strong> items.
-                    {remainingQuota >= 50 ? (
+                    Inventory status: <strong>{currentCount}</strong> / <strong>{maxItemsLimit}</strong> items.
+                    {remainingQuota > 0 ? (
                       <span className="text-emerald-600 dark:text-emerald-400 ml-1 font-medium">
-                        You have sufficient quota ({remainingQuota} slots) to import all 50 products.
+                        You can upload up to {remainingQuota} items under {organization?.name || "your organization"}.
                       </span>
                     ) : (
-                      <span className="text-amber-600 dark:text-amber-400 ml-1 font-medium">
-                        Available quota allows uploading up to {remainingQuota} items before hitting your limit.
+                      <span className="text-red-600 dark:text-red-400 ml-1 font-medium">
+                        Maximum limit of {maxItemsLimit} items reached for this organization.
                       </span>
                     )}
                   </div>
                   <div className="text-[11px] text-zinc-500">
-                    * Missing categories (e.g. Groceries & Staples, Beverages) will be automatically created under your organization and assigned.
+                    * If a category in the spreadsheet does not exist yet, Bill Next will automatically create it under your organization.
                   </div>
                 </div>
               </div>
 
-              {/* Sample Products Preview List */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  <span>Previewing 50 Retail Products:</span>
-                  <span className="text-[11px] text-zinc-400 font-mono">
-                    {SAMPLE_50_PRODUCTS.length} curated supermarket SKUs
-                  </span>
-                </div>
-
-                <div className="border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden max-h-56 overflow-y-auto divide-y divide-zinc-200 dark:divide-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-xs">
-                  {SAMPLE_50_PRODUCTS.map((p, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2.5 flex items-center justify-between hover:bg-white dark:hover:bg-zinc-900"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-zinc-400 text-[10px] w-5">
-                          {idx + 1}
-                        </span>
-                        <div>
-                          <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                            {p.name}
-                          </div>
-                          <div className="text-[10px] text-zinc-400 font-mono">
-                            {p.short_code} &bull; {p.category_name} &bull; Unit: {p.unit}
-                          </div>
-                        </div>
+              {/* TAB 1: EXCEL FILE UPLOAD */}
+              {bulkTab === "excel" && (
+                <div className="space-y-4">
+                  {/* Download Template Strip */}
+                  <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                        Sample Excel Template
                       </div>
-                      <div className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">
-                        ₹{p.price.toFixed(2)}
+                      <p className="text-[11px] text-zinc-500">
+                        Includes standard column headers: <strong>Item Name</strong>, <strong>Short Code</strong>, <strong>Category</strong>, <strong>Unit</strong> (Piece, KG, Litre), and <strong>Price</strong>.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={downloadSampleExcelTemplate}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm shrink-0 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download Sample Excel (.xlsx)
+                    </button>
+                  </div>
+
+                  {/* File Upload Drop Area */}
+                  <div className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-lg p-6 text-center bg-zinc-50/50 dark:bg-zinc-950/50 transition-colors">
+                    <input
+                      type="file"
+                      ref={excelInputRef}
+                      accept=".xlsx, .xls, .csv"
+                      onChange={handleExcelFileChange}
+                      className="hidden"
+                      id="excel-file-upload-input"
+                    />
+                    <label
+                      htmlFor="excel-file-upload-input"
+                      className="cursor-pointer flex flex-col items-center justify-center space-y-2"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <FileUp className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                          {excelFile ? excelFile.name : "Click to choose Excel file (.xlsx, .xls, .csv)"}
+                        </span>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          {excelFile
+                            ? `${(excelFile.size / 1024).toFixed(1)} KB · ${parsedExcelProducts.length} items parsed`
+                            : "or drag and drop your spreadsheet here"}
+                        </p>
+                      </div>
+                    </label>
+
+                    {excelFile && (
+                      <button
+                        type="button"
+                        onClick={resetExcelState}
+                        className="mt-3 inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-red-500"
+                      >
+                        <X className="w-3 h-3" />
+                        Remove file and select another
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Parse Loading Spinner */}
+                  {isParsingExcel && (
+                    <div className="p-4 text-center flex items-center justify-center gap-2 text-xs text-zinc-500">
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+                      Parsing spreadsheet rows...
+                    </div>
+                  )}
+
+                  {/* Validation errors/warnings */}
+                  {excelParseErrors.length > 0 && (
+                    <div className="p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                      <div className="font-semibold flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        Spreadsheet Notes ({excelParseErrors.length}):
+                      </div>
+                      <div className="max-h-20 overflow-y-auto text-[11px] font-mono space-y-0.5">
+                        {excelParseErrors.map((err, i) => (
+                          <div key={i}>&bull; {err}</div>
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* Parsed Products Preview Table */}
+                  {parsedExcelProducts.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        <span>Previewing Excel Rows ({parsedExcelProducts.length} items):</span>
+                        <span className="text-[11px] text-zinc-400 font-mono">
+                          Limit capacity: {Math.min(parsedExcelProducts.length, remainingQuota)} will be added
+                        </span>
+                      </div>
+
+                      <div className="border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden max-h-56 overflow-y-auto divide-y divide-zinc-200 dark:divide-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-xs">
+                        {parsedExcelProducts.map((p, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2.5 flex items-center justify-between hover:bg-white dark:hover:bg-zinc-900"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-zinc-400 text-[10px] w-6">
+                                {idx + 1}
+                              </span>
+                              <div>
+                                <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                                  {p.name}
+                                </div>
+                                <div className="text-[10px] text-zinc-400 font-mono">
+                                  {p.short_code} &bull; {p.category_name} &bull; Unit: {p.unit}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">
+                              ₹{Number(p.price).toFixed(2)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
+
+              {/* TAB 2: READY-MADE 50 RETAIL DEMO SKUS */}
+              {bulkTab === "sample" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                    <span>Curated Retail Catalog (50 items):</span>
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      Supermarket staples, beverages, dairy & snacks
+                    </span>
+                  </div>
+
+                  <div className="border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden max-h-60 overflow-y-auto divide-y divide-zinc-200 dark:divide-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-xs">
+                    {SAMPLE_50_PRODUCTS.map((p, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2.5 flex items-center justify-between hover:bg-white dark:hover:bg-zinc-900"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-zinc-400 text-[10px] w-5">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                              {p.name}
+                            </div>
+                            <div className="text-[10px] text-zinc-400 font-mono">
+                              {p.short_code} &bull; {p.category_name} &bull; Unit: {p.unit}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">
+                          ₹{p.price.toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
@@ -948,21 +1205,40 @@ export default function ItemsPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  disabled={isBulkUploading || remainingQuota <= 0}
-                  onClick={handleBulkUpload}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm disabled:opacity-50 transition-all"
-                >
-                  {isBulkUploading ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Uploading & Creating Categories...
-                    </>
-                  ) : (
-                    `Upload ${Math.min(50, remainingQuota)} Items Now`
-                  )}
-                </button>
+
+                {bulkTab === "excel" ? (
+                  <button
+                    type="button"
+                    disabled={isBulkUploading || parsedExcelProducts.length === 0 || remainingQuota <= 0}
+                    onClick={handleUploadParsedExcel}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm disabled:opacity-50 transition-all"
+                  >
+                    {isBulkUploading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Uploading Excel Items...
+                      </>
+                    ) : (
+                      `Upload ${Math.min(parsedExcelProducts.length, remainingQuota)} Excel Items`
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isBulkUploading || remainingQuota <= 0}
+                    onClick={handleBulkUploadDemo}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm disabled:opacity-50 transition-all"
+                  >
+                    {isBulkUploading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Uploading Demo SKUs...
+                      </>
+                    ) : (
+                      `Upload ${Math.min(50, remainingQuota)} Demo Items`
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>

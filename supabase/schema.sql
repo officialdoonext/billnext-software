@@ -11,13 +11,14 @@ create table if not exists public.organizations (
   mobile_number text not null,
   status text not null default 'inactive',
   expiry_date timestamptz not null default (now() - interval '1 day'),
-  items_count integer not null default 100, -- Maximum allowed items for this organization
+  items_count integer not null default 50, -- Maximum allowed items for this organization
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
--- Ensure items_count column exists if organizations already created
-alter table public.organizations add column if not exists items_count integer not null default 100;
+-- Ensure items_count column exists if organizations already created, and defaults to 50
+alter table public.organizations add column if not exists items_count integer not null default 50;
+alter table public.organizations alter column items_count set default 50;
 
 -- 2. Create User Profiles Table
 create table if not exists public.user_profiles (
@@ -85,9 +86,9 @@ begin
   org_name := coalesce(new.raw_user_meta_data->>'org_name', 'My Organization');
   user_mobile := coalesce(new.raw_user_meta_data->>'mobile_number', '');
 
-  -- Create organisation with status 'inactive', expiry_date yesterday, items_count 100
+  -- Create organisation with status 'inactive', expiry_date yesterday, items_count 50
   insert into public.organizations (name, mobile_number, status, expiry_date, items_count)
-  values (org_name, user_mobile, 'inactive', yesterday_date, 100)
+  values (org_name, user_mobile, 'inactive', yesterday_date, 50)
   returning id into new_org_id;
 
   -- Create user profile linking auth.users to organizations
