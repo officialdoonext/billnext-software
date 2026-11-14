@@ -19,7 +19,8 @@ import {
   FolderTree,
   Users,
   Settings,
-  HelpCircle
+  HelpCircle,
+  TrendingUp
 } from "lucide-react";
 
 export interface RoadmapItem {
@@ -39,7 +40,7 @@ export interface ComingSoonViewProps {
   category: string;
   title: string;
   description: string;
-  iconType: "billing" | "items" | "categories" | "users" | "settings";
+  iconType: "billing" | "items" | "categories" | "users" | "settings" | "sales";
   nodeTitle: string;
   nodeSubtitle: string;
   nodeStats: string;
@@ -53,6 +54,7 @@ const ICON_MAP = {
   categories: FolderTree,
   users: Users,
   settings: Settings,
+  sales: TrendingUp,
 };
 
 export default function ComingSoonView({

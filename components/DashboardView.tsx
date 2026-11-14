@@ -21,7 +21,8 @@ import {
   FolderTree,
   Users,
   Settings,
-  Sparkles
+  Sparkles,
+  TrendingUp
 } from "lucide-react";
 
 function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -404,16 +405,22 @@ export default function DashboardView() {
               Bill Next Modules Overview
             </h2>
           </div>
-          <span className="text-xs text-zinc-500">5 modules currently in development</span>
+          <span className="text-xs text-zinc-500">6 modules currently in development</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
           {[
             {
               title: "Billing",
               desc: "Invoices, tax & billing engines",
               href: "/billing",
               icon: Receipt,
+            },
+            {
+              title: "Sales",
+              desc: "Orders, returns & revenue",
+              href: "/sales",
+              icon: TrendingUp,
             },
             {
               title: "Items",

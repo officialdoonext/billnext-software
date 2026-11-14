@@ -12,7 +12,8 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
-  Sparkles
+  Sparkles,
+  TrendingUp
 } from "lucide-react";
 
 interface SidebarProps {
@@ -41,6 +42,12 @@ export default function Sidebar({
       name: "Billing",
       href: "/billing",
       icon: Receipt,
+      badge: "SOON",
+    },
+    {
+      name: "Sales",
+      href: "/sales",
+      icon: TrendingUp,
       badge: "SOON",
     },
     {

@@ -12,7 +12,8 @@ import {
   Settings,
   ArrowRight,
   ExternalLink,
-  Zap
+  Zap,
+  TrendingUp
 } from "lucide-react";
 
 interface SearchModalProps {
@@ -40,6 +41,14 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
       href: "/billing",
       icon: Receipt,
       category: "Finance",
+      status: "Coming Soon",
+    },
+    {
+      title: "Sales",
+      subtitle: "Orders, transaction history, refunds, Z-reports & sales analytics",
+      href: "/sales",
+      icon: TrendingUp,
+      category: "Transactions",
       status: "Coming Soon",
     },
     {
