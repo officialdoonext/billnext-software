@@ -98,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   mobile_number: profData.organizations.mobile_number,
                   status: profData.organizations.status,
                   expiry_date: profData.organizations.expiry_date,
+                  items_count: profData.organizations.items_count ?? 100,
                 };
                 setOrganization(orgData);
                 updateAuthCookie(true, checkIsAllowed(orgData));
@@ -240,6 +241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             mobile_number: triggerProf.organizations.mobile_number,
             status: triggerProf.organizations.status,
             expiry_date: triggerProf.organizations.expiry_date,
+            items_count: triggerProf.organizations.items_count ?? 100,
           };
           createdProfile = {
             id: triggerProf.id,
@@ -260,6 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 mobile_number: mobileNumber,
                 status: "inactive",
                 expiry_date: yesterday,
+                items_count: 100,
               },
             ])
             .select()
@@ -352,6 +355,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               mobile_number: profData.organizations.mobile_number,
               status: profData.organizations.status,
               expiry_date: profData.organizations.expiry_date,
+              items_count: profData.organizations.items_count ?? 100,
             };
             const userProf: UserProfile = {
               id: profData.id,
@@ -452,6 +456,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             mobile_number: profData.organizations.mobile_number,
             status: profData.organizations.status,
             expiry_date: profData.organizations.expiry_date,
+            items_count: profData.organizations.items_count ?? 100,
           };
           setOrganization(orgData);
           updateAuthCookie(true, checkIsAllowed(orgData));

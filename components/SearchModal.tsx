@@ -53,19 +53,19 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
     },
     {
       title: "Items",
-      subtitle: "Product inventory, barcode tracking, variants & stock alerts",
+      subtitle: "Product inventory, barcode tracking, 60KB image optimization & items count limit",
       href: "/items",
       icon: Package,
       category: "Catalog",
-      status: "Coming Soon",
+      status: "Active",
     },
     {
       title: "Item Categories",
-      subtitle: "Tax slab grouping, hierarchical categories & department classification",
+      subtitle: "Tax slab grouping, hierarchical categories & organization taxonomy",
       href: "/categories",
       icon: FolderTree,
       category: "Catalog",
-      status: "Coming Soon",
+      status: "Active",
     },
     {
       title: "Users",

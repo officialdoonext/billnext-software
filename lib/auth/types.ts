@@ -4,6 +4,7 @@ export interface Organization {
   mobile_number: string;
   status: "active" | "inactive" | string;
   expiry_date: string; // ISO timestamp string
+  items_count?: number; // max allowed items limit for this organization
   created_at?: string;
   updated_at?: string;
 }
@@ -16,6 +17,29 @@ export interface UserProfile {
   mobile_number: string;
   role: string;
   created_at?: string;
+}
+
+export interface Category {
+  id: string;
+  org_id: string;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+  item_count?: number;
+}
+
+export interface Item {
+  id: string;
+  org_id: string;
+  category_id?: string | null;
+  category_name?: string;
+  name: string;
+  short_code: string;
+  unit: "Piece" | "KG" | "Litre" | string;
+  price: number;
+  image_url?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AuthContextType {
@@ -43,4 +67,3 @@ export interface AuthContextType {
   signOut: () => Promise<void>;
   refreshStatus: () => Promise<void>;
 }
-

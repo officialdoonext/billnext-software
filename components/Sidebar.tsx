@@ -54,13 +54,13 @@ export default function Sidebar({
       name: "Items",
       href: "/items",
       icon: Package,
-      badge: "SOON",
+      badge: null,
     },
     {
       name: "Item Categories",
       href: "/categories",
       icon: FolderTree,
-      badge: "SOON",
+      badge: null,
     },
     {
       name: "Users",

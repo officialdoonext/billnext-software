@@ -1,19 +1,23 @@
 -- ==========================================================
--- Bill Next — Supabase Database Schema & Setup
+-- Bill Next — Complete Database Schema & Multi-Tenant Setup
 -- Run this in your Supabase SQL Editor:
 -- https://supabase.com/dashboard/project/eknexmgwtjqacsqftlnq/sql/new
 -- ==========================================================
 
--- 1. Create Organizations Table
+-- 1. Create / Update Organizations Table
 create table if not exists public.organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   mobile_number text not null,
-  status text not null default 'inactive', -- Default: 'inactive'
-  expiry_date timestamptz not null default (now() - interval '1 day'), -- Default: yesterday's date
+  status text not null default 'inactive',
+  expiry_date timestamptz not null default (now() - interval '1 day'),
+  items_count integer not null default 100, -- Maximum allowed items for this organization
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Ensure items_count column exists if organizations already created
+alter table public.organizations add column if not exists items_count integer not null default 100;
 
 -- 2. Create User Profiles Table
 create table if not exists public.user_profiles (
@@ -27,48 +31,48 @@ create table if not exists public.user_profiles (
   updated_at timestamptz not null default now()
 );
 
--- 3. Enable Row Level Security (RLS)
+-- 3. Create Item Categories Table (Organization-Specific)
+create table if not exists public.categories (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- 4. Create Items / Products Table (Organization-Specific)
+create table if not exists public.items (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  category_id uuid references public.categories(id) on delete set null,
+  name text not null,
+  short_code text not null,
+  unit text not null default 'Piece', -- Piece, KG, Litre
+  price numeric(12, 2) not null default 0.00,
+  image_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- 5. Enable Row Level Security (RLS) on all tables
 alter table public.organizations enable row level security;
 alter table public.user_profiles enable row level security;
+alter table public.categories enable row level security;
+alter table public.items enable row level security;
 
--- 4. Clean up any previous policies to avoid duplicates
-drop policy if exists "Allow user to read own profile" on public.user_profiles;
-drop policy if exists "Allow user to insert own profile" on public.user_profiles;
-drop policy if exists "Allow user to update own profile" on public.user_profiles;
-drop policy if exists "Allow users to read their organization" on public.organizations;
-drop policy if exists "Allow authenticated users to insert organizations" on public.organizations;
-drop policy if exists "Allow owners to update their organization" on public.organizations;
-drop policy if exists "Allow all to insert organizations" on public.organizations;
-drop policy if exists "Allow all to insert user_profiles" on public.user_profiles;
-drop policy if exists "Allow read organizations" on public.organizations;
-drop policy if exists "Allow read user_profiles" on public.user_profiles;
+-- 6. Clean up previous policies to prevent duplicates
+drop policy if exists "Allow all on organizations" on public.organizations;
+drop policy if exists "Allow all on user_profiles" on public.user_profiles;
+drop policy if exists "Allow all on categories" on public.categories;
+drop policy if exists "Allow all on items" on public.items;
 
--- 5. Set Permissive Policies so Signup & Client can Save without RLS 401 Error
-create policy "Allow all to insert organizations" 
-  on public.organizations for insert 
-  with check (true);
+-- 7. Create Permissive Policies (All queries filter by org_id on frontend/backend)
+create policy "Allow all on organizations" on public.organizations for all using (true) with check (true);
+create policy "Allow all on user_profiles" on public.user_profiles for all using (true) with check (true);
+create policy "Allow all on categories" on public.categories for all using (true) with check (true);
+create policy "Allow all on items" on public.items for all using (true) with check (true);
 
-create policy "Allow read organizations" 
-  on public.organizations for select 
-  using (true);
-
-create policy "Allow update organizations" 
-  on public.organizations for update 
-  using (true);
-
-create policy "Allow all to insert user_profiles" 
-  on public.user_profiles for insert 
-  with check (true);
-
-create policy "Allow read user_profiles" 
-  on public.user_profiles for select 
-  using (true);
-
-create policy "Allow update user_profiles" 
-  on public.user_profiles for update 
-  using (true);
-
--- 6. AUTOMATIC DATABASE TRIGGER (Guarantees data is saved upon signup!)
+-- 8. AUTOMATIC DATABASE TRIGGER on auth.users
 create or replace function public.handle_new_user()
 returns trigger as $$
 declare
@@ -81,9 +85,9 @@ begin
   org_name := coalesce(new.raw_user_meta_data->>'org_name', 'My Organization');
   user_mobile := coalesce(new.raw_user_meta_data->>'mobile_number', '');
 
-  -- Create organisation with status 'inactive' and expiry_date yesterday
-  insert into public.organizations (name, mobile_number, status, expiry_date)
-  values (org_name, user_mobile, 'inactive', yesterday_date)
+  -- Create organisation with status 'inactive', expiry_date yesterday, items_count 100
+  insert into public.organizations (name, mobile_number, status, expiry_date, items_count)
+  values (org_name, user_mobile, 'inactive', yesterday_date, 100)
   returning id into new_org_id;
 
   -- Create user profile linking auth.users to organizations
