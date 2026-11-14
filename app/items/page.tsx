@@ -54,6 +54,7 @@ export default function ItemsPage() {
   const [shortCode, setShortCode] = useState("");
   const [unit, setUnit] = useState<"Piece" | "KG" | "Litre">("Piece");
   const [price, setPrice] = useState("");
+  const [stock, setStock] = useState("50");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -142,6 +143,7 @@ export default function ItemsPage() {
     setShortCode("");
     setUnit("Piece");
     setPrice("");
+    setStock("50");
     setSelectedCategoryId("");
     setImageFile(null);
     setCompressedBase64(null);
@@ -269,6 +271,7 @@ export default function ItemsPage() {
           short_code: shortCode.trim() || `ITM-${Date.now().toString().slice(-4)}`,
           unit,
           price: numericPrice,
+          stock: Math.max(0, parseInt(stock, 10) || 0),
           category_id: selectedCategoryId || null,
           category_name: matchedCat?.name || "Uncategorized",
           image_url: finalImageUrl,
@@ -622,6 +625,7 @@ export default function ItemsPage() {
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4">Unit</th>
                   <th className="py-3 px-4 text-right">Price (₹)</th>
+                  <th className="py-3 px-4 text-right">Stock</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -674,6 +678,19 @@ export default function ItemsPage() {
                     </td>
                     <td className="py-3 px-4 text-right font-mono font-semibold text-zinc-900 dark:text-zinc-100">
                       ₹{Number(item.price).toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                          (item.stock || 0) <= 0
+                            ? "bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800"
+                            : (item.stock || 0) < 10
+                            ? "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+                            : "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                        }`}
+                      >
+                        {item.stock !== undefined ? item.stock : 0} {item.unit}
+                      </span>
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
@@ -834,8 +851,8 @@ export default function ItemsPage() {
                 </div>
               </div>
 
-              {/* Price & Category Dropdown */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Price, Stock & Category Dropdown */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
                     Price (₹) <span className="text-emerald-500">*</span>
@@ -848,6 +865,21 @@ export default function ItemsPage() {
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="e.g. 540.00"
+                    className="w-full px-3 py-2 text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                    Stock Count (Qty) <span className="text-emerald-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                    placeholder="e.g. 50"
                     className="w-full px-3 py-2 text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
                   />
                 </div>
@@ -1142,7 +1174,7 @@ export default function ItemsPage() {
                                   {p.name}
                                 </div>
                                 <div className="text-[10px] text-zinc-400 font-mono">
-                                  {p.short_code} &bull; {p.category_name} &bull; Unit: {p.unit}
+                                  {p.short_code} &bull; {p.category_name} &bull; Unit: {p.unit} &bull; Stock: {p.stock ?? 0}
                                 </div>
                               </div>
                             </div>
@@ -1182,7 +1214,7 @@ export default function ItemsPage() {
                               {p.name}
                             </div>
                             <div className="text-[10px] text-zinc-400 font-mono">
-                              {p.short_code} &bull; {p.category_name} &bull; Unit: {p.unit}
+                              {p.short_code} &bull; {p.category_name} &bull; Unit: {p.unit} &bull; Stock: {p.stock ?? 0}
                             </div>
                           </div>
                         </div>

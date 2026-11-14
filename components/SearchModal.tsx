@@ -37,19 +37,27 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
     },
     {
       title: "Billing",
-      subtitle: "Invoicing, payment gateways, GST calculation & subscription plans",
+      subtitle: "POS checkout terminal, weigh scale modal, customer tagging & draft bills",
       href: "/billing",
       icon: Receipt,
       category: "Finance",
-      status: "Coming Soon",
+      status: "Active",
     },
     {
       title: "Sales",
-      subtitle: "Orders, transaction history, refunds, Z-reports & sales analytics",
+      subtitle: "Date range analytics, latest 24 orders pagination & tax invoice reprinting",
       href: "/sales",
       icon: TrendingUp,
       category: "Transactions",
-      status: "Coming Soon",
+      status: "Active",
+    },
+    {
+      title: "Customers",
+      subtitle: "Customer contacts, phone directory & purchase ledger",
+      href: "/customers",
+      icon: Users,
+      category: "CRM",
+      status: "Active",
     },
     {
       title: "Items",
@@ -81,7 +89,7 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
       href: "/settings",
       icon: Settings,
       category: "Administration",
-      status: "Coming Soon",
+      status: "Active",
     },
   ];
 

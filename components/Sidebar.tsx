@@ -42,13 +42,19 @@ export default function Sidebar({
       name: "Billing",
       href: "/billing",
       icon: Receipt,
-      badge: "SOON",
+      badge: null,
     },
     {
       name: "Sales",
       href: "/sales",
       icon: TrendingUp,
-      badge: "SOON",
+      badge: null,
+    },
+    {
+      name: "Customers",
+      href: "/customers",
+      icon: Users,
+      badge: null,
     },
     {
       name: "Items",
@@ -75,7 +81,7 @@ export default function Sidebar({
       name: "Settings",
       href: "/settings",
       icon: Settings,
-      badge: "SOON",
+      badge: null,
     },
   ];
 

@@ -30,6 +30,7 @@ export async function fetchItems(orgId: string): Promise<Item[]> {
           short_code: row.short_code,
           unit: row.unit,
           price: Number(row.price),
+          stock: row.stock !== undefined && row.stock !== null ? Number(row.stock) : 0,
           image_url: row.image_url,
           created_at: row.created_at,
           updated_at: row.updated_at,
@@ -67,6 +68,7 @@ export async function addItem(
     short_code: string;
     unit: string;
     price: number;
+    stock?: number;
     category_id?: string | null;
     category_name?: string;
     image_url?: string | null;
@@ -90,6 +92,8 @@ export async function addItem(
     return { success: false, error: "Item name is required" };
   }
 
+  const itemStock = itemData.stock !== undefined ? Math.max(0, Number(itemData.stock)) : 0;
+
   // 2. Try Supabase insert
   if (isSupabaseConfigured()) {
     try {
@@ -100,6 +104,7 @@ export async function addItem(
         short_code: trimmedCode,
         unit: itemData.unit || "Piece",
         price: Number(itemData.price) || 0,
+        stock: itemStock,
         category_id: itemData.category_id || null,
         image_url: itemData.image_url || null,
       };
@@ -113,6 +118,7 @@ export async function addItem(
       if (!error && data) {
         const newItem: Item = {
           ...data,
+          stock: data.stock !== undefined ? Number(data.stock) : itemStock,
           category_name: itemData.category_name || "Uncategorized",
         };
 
@@ -140,6 +146,7 @@ export async function addItem(
     short_code: trimmedCode,
     unit: itemData.unit || "Piece",
     price: Number(itemData.price) || 0,
+    stock: itemStock,
     image_url: itemData.image_url || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -194,7 +201,7 @@ export async function bulkAddItems(
     }
   }
 
-  // Prepare database rows
+  // Prepare database rows with stock
   const newItemsPayload = itemsToInsert.map((p) => ({
     org_id: orgId,
     name: p.name,
@@ -202,6 +209,7 @@ export async function bulkAddItems(
     category_id: catMap.get(p.category_name.toLowerCase()) || null,
     unit: p.unit,
     price: p.price,
+    stock: p.stock !== undefined ? Number(p.stock) : 50,
     image_url: null,
   }));
 
@@ -236,6 +244,7 @@ export async function bulkAddItems(
       category_name: itemsToInsert[idx].category_name,
       unit: p.unit,
       price: p.price,
+      stock: p.stock,
       image_url: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -282,3 +291,45 @@ export async function deleteItem(orgId: string, id: string): Promise<void> {
   }
 }
 
+/**
+ * Deducts stock from inventory when a bill is settled
+ */
+export async function deductItemStock(
+  orgId: string,
+  deductions: Array<{ id: string; quantity: number }>
+): Promise<void> {
+  if (!orgId || deductions.length === 0) return;
+
+  const currentItems = await fetchItems(orgId);
+  const updatedMap = new Map<string, number>();
+
+  for (const item of currentItems) {
+    const deduction = deductions.find((d) => d.id === item.id);
+    if (deduction) {
+      const newStock = Math.max(0, (item.stock || 0) - Math.ceil(deduction.quantity));
+      updatedMap.set(item.id, newStock);
+      item.stock = newStock;
+    }
+  }
+
+  // Update in Supabase
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createClient();
+      for (const [id, stock] of updatedMap.entries()) {
+        await supabase
+          .from("items")
+          .update({ stock })
+          .eq("id", id)
+          .eq("org_id", orgId);
+      }
+    } catch (e) {
+      console.warn("Error updating stock in Supabase:", e);
+    }
+  }
+
+  // Update local storage
+  if (typeof window !== "undefined") {
+    localStorage.setItem(getLocalItemsKey(orgId), JSON.stringify(currentItems));
+  }
+}

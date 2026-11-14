@@ -39,6 +39,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const formatOrg = (raw: any): Organization => ({
+    id: raw.id,
+    name: raw.name,
+    mobile_number: raw.mobile_number,
+    status: raw.status,
+    expiry_date: raw.expiry_date,
+    items_count: raw.items_count ?? 50,
+    logo_url: raw.logo_url || null,
+    city: raw.city || "",
+    address: raw.address || "",
+    gst_enabled: Boolean(raw.gst_enabled),
+    gst_number: raw.gst_number || "",
+    gst_percentage: Number(raw.gst_percentage) || 0,
+    cgst_percentage: Number(raw.cgst_percentage) || 0,
+    sgst_percentage: Number(raw.sgst_percentage) || 0,
+    gst_type: raw.gst_type || "exclusive",
+    allow_out_of_stock_billing:
+      raw.allow_out_of_stock_billing !== undefined
+        ? Boolean(raw.allow_out_of_stock_billing)
+        : true,
+    created_at: raw.created_at,
+    updated_at: raw.updated_at,
+  });
+
   // Check whether status is active and expiry_date has not passed
   const checkIsAllowed = (org: Organization | null): boolean => {
     if (!org) return false;
@@ -92,14 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setProfile(userProf);
 
               if (profData.organizations) {
-                const orgData: Organization = {
-                  id: profData.organizations.id,
-                  name: profData.organizations.name,
-                  mobile_number: profData.organizations.mobile_number,
-                  status: profData.organizations.status,
-                  expiry_date: profData.organizations.expiry_date,
-                  items_count: profData.organizations.items_count ?? 50,
-                };
+                const orgData: Organization = formatOrg(profData.organizations);
                 setOrganization(orgData);
                 updateAuthCookie(true, checkIsAllowed(orgData));
                 setIsLoading(false);
@@ -235,14 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
 
         if (triggerProf && triggerProf.organizations) {
-          createdOrg = {
-            id: triggerProf.organizations.id,
-            name: triggerProf.organizations.name,
-            mobile_number: triggerProf.organizations.mobile_number,
-            status: triggerProf.organizations.status,
-            expiry_date: triggerProf.organizations.expiry_date,
-            items_count: triggerProf.organizations.items_count ?? 50,
-          };
+          createdOrg = formatOrg(triggerProf.organizations);
           createdProfile = {
             id: triggerProf.id,
             org_id: triggerProf.org_id,
@@ -349,14 +359,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .maybeSingle();
 
           if (profData && profData.organizations) {
-            const orgData: Organization = {
-              id: profData.organizations.id,
-              name: profData.organizations.name,
-              mobile_number: profData.organizations.mobile_number,
-              status: profData.organizations.status,
-              expiry_date: profData.organizations.expiry_date,
-              items_count: profData.organizations.items_count ?? 50,
-            };
+            const orgData: Organization = formatOrg(profData.organizations);
             const userProf: UserProfile = {
               id: profData.id,
               org_id: profData.org_id,
@@ -450,20 +453,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
 
         if (profData && profData.organizations) {
-          const orgData: Organization = {
-            id: profData.organizations.id,
-            name: profData.organizations.name,
-            mobile_number: profData.organizations.mobile_number,
-            status: profData.organizations.status,
-            expiry_date: profData.organizations.expiry_date,
-            items_count: profData.organizations.items_count ?? 50,
-          };
+          const orgData: Organization = formatOrg(profData.organizations);
           setOrganization(orgData);
           updateAuthCookie(true, checkIsAllowed(orgData));
         }
       } catch (e) {
         console.warn("Refresh status note:", e);
       }
+    }
+  };
+
+  // Update Organization Details (Profile, GST, Utilities)
+  const updateOrganization = async (
+    updates: Partial<Organization>
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!organization?.id) return { success: false, error: "No active organization" };
+    try {
+      const merged: Organization = {
+        ...organization,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured()) {
+        const supabase = createClient();
+        const { error } = await supabase
+          .from("organizations")
+          .update(updates)
+          .eq("id", organization.id);
+
+        if (error) {
+          console.warn("Supabase organization update warning:", error);
+        }
+      }
+
+      setOrganization(merged);
+      localStorage.setItem(LOCAL_STORAGE_KEY_ORG, JSON.stringify(merged));
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to update organization" };
     }
   };
 
@@ -482,6 +510,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signOut,
         refreshStatus,
+        updateOrganization,
       }}
     >
       {children}

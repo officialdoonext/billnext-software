@@ -408,11 +408,11 @@ export default function DashboardView() {
           <span className="text-xs text-zinc-500">6 modules currently in development</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
           {[
             {
               title: "Billing",
-              desc: "Invoices, tax & billing engines",
+              desc: "Invoices, tax & POS checkout",
               href: "/billing",
               icon: Receipt,
             },
@@ -421,6 +421,12 @@ export default function DashboardView() {
               desc: "Orders, returns & revenue",
               href: "/sales",
               icon: TrendingUp,
+            },
+            {
+              title: "Customers",
+              desc: "Client directory & phone",
+              href: "/customers",
+              icon: Users,
             },
             {
               title: "Items",
@@ -442,7 +448,7 @@ export default function DashboardView() {
             },
             {
               title: "Settings",
-              desc: "Printers, store info & keys",
+              desc: "GST, store profile & keys",
               href: "/settings",
               icon: Settings,
             },

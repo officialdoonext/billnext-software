@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import { SampleProduct } from "@/lib/data/sample-products";
 
 /**
- * Downloads a pre-formatted Excel template (.xlsx) with sample data
+ * Downloads a pre-formatted Excel template (.xlsx) with sample data including Stock
  */
 export function downloadSampleExcelTemplate() {
   const sampleData = [
@@ -12,6 +12,7 @@ export function downloadSampleExcelTemplate() {
       "Category": "Groceries & Staples",
       "Unit": "KG",
       "Price": 540.0,
+      "Stock": 50,
     },
     {
       "Item Name": "Amul Pure Cow Ghee 1L Tin",
@@ -19,6 +20,7 @@ export function downloadSampleExcelTemplate() {
       "Category": "Oils & Ghee",
       "Unit": "Litre",
       "Price": 650.0,
+      "Stock": 30,
     },
     {
       "Item Name": "Britannia Cheddar Cheese 200g",
@@ -26,6 +28,7 @@ export function downloadSampleExcelTemplate() {
       "Category": "Dairy & Breakfast",
       "Unit": "Piece",
       "Price": 140.0,
+      "Stock": 45,
     },
     {
       "Item Name": "Nescafe Classic Coffee 100g Jar",
@@ -33,6 +36,7 @@ export function downloadSampleExcelTemplate() {
       "Category": "Beverages",
       "Unit": "Piece",
       "Price": 320.0,
+      "Stock": 60,
     },
     {
       "Item Name": "Tata Crystal Salt 1kg",
@@ -40,6 +44,7 @@ export function downloadSampleExcelTemplate() {
       "Category": "Groceries & Staples",
       "Unit": "KG",
       "Price": 28.0,
+      "Stock": 100,
     },
   ];
 
@@ -53,6 +58,7 @@ export function downloadSampleExcelTemplate() {
     { wch: 25 }, // Category
     { wch: 12 }, // Unit
     { wch: 12 }, // Price
+    { wch: 10 }, // Stock
   ];
 
   // Create workbook
@@ -64,7 +70,7 @@ export function downloadSampleExcelTemplate() {
 }
 
 /**
- * Parses an uploaded Excel (.xlsx, .xls) or CSV file into SampleProduct array
+ * Parses an uploaded Excel (.xlsx, .xls) or CSV file into SampleProduct array with Stock
  */
 export async function parseExcelFile(
   file: File
@@ -175,12 +181,30 @@ export async function parseExcelFile(
           );
           const price = isNaN(cleanPrice) || cleanPrice < 0 ? 0 : cleanPrice;
 
+          // Parse Stock
+          const rawStock =
+            row["Stock"] ||
+            row["stock"] ||
+            row["Stock Count"] ||
+            row["stock count"] ||
+            row["Quantity"] ||
+            row["quantity"] ||
+            row["Qty"] ||
+            row["qty"] ||
+            0;
+          const cleanStock = parseInt(
+            typeof rawStock === "string" ? rawStock.replace(/[^0-9]/g, "") : rawStock,
+            10
+          );
+          const stock = isNaN(cleanStock) || cleanStock < 0 ? 0 : cleanStock;
+
           products.push({
             name,
             short_code: shortCode,
             category_name: categoryName || "General",
             unit,
             price,
+            stock,
           });
         });
 
@@ -194,4 +218,3 @@ export async function parseExcelFile(
     reader.readAsArrayBuffer(file);
   });
 }
-
