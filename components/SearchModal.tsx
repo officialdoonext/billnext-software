@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth/auth-context";
 import {
   Search,
   LayoutDashboard,
@@ -25,6 +26,7 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const router = useRouter();
+  const { canView } = useAuth();
 
   const pages = [
     {
@@ -77,11 +79,11 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
     },
     {
       title: "Users",
-      subtitle: "Team member access, cashier roles, branch assignments & activity audit",
+      subtitle: "Team member access, cashier roles, MPIN credentials & granular page permissions",
       href: "/users",
       icon: Users,
       category: "Administration",
-      status: "Coming Soon",
+      status: "Active",
     },
     {
       title: "Settings",
@@ -93,7 +95,9 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
     },
   ];
 
-  const filtered = pages.filter(
+  const visiblePages = pages.filter((p) => canView(p.href));
+
+  const filtered = visiblePages.filter(
     (p) =>
       p.title.toLowerCase().includes(query.toLowerCase()) ||
       p.subtitle.toLowerCase().includes(query.toLowerCase()) ||

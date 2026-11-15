@@ -23,10 +23,12 @@ import {
 export const dynamic = "force-dynamic";
 
 export default function CustomersPage() {
-  const { organization, isLoading: authLoading } = useAuth();
+  const { organization, isLoading: authLoading, role, canEdit } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const hasEditAccess = role === "owner" || canEdit("/customers");
 
   // Notifications
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -160,16 +162,22 @@ export default function CustomersPage() {
             <Receipt className="w-3.5 h-3.5 text-emerald-500" />
             Open Billing Terminal
           </Link>
-          <button
-            onClick={() => {
-              setErrorMsg(null);
-              setIsModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <Plus className="w-4 h-4" />
-            Add Customer
-          </button>
+          {hasEditAccess ? (
+            <button
+              onClick={() => {
+                setErrorMsg(null);
+                setIsModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Add Customer
+            </button>
+          ) : (
+            <span className="text-xs font-mono text-zinc-400 px-3 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+              View Only
+            </span>
+          )}
         </div>
       </div>
 
@@ -324,18 +332,20 @@ export default function CustomersPage() {
                       {organization?.name || "This Org"}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleDeleteCustomer(cust.id, cust.name)}
-                        disabled={deletingId === cust.id}
-                        title="Delete customer"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
-                      >
-                        {deletingId === cust.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
-                      </button>
+                      {hasEditAccess && (
+                        <button
+                          onClick={() => handleDeleteCustomer(cust.id, cust.name)}
+                          disabled={deletingId === cust.id}
+                          title="Delete customer"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {deletingId === cust.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

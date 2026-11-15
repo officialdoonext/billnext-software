@@ -94,9 +94,9 @@ function LoginForm() {
 
       // Check if access conditions met
       if (res.isAllowed) {
-        setSuccessMsg("Welcome back! Redirecting to dashboard...");
+        setSuccessMsg("Welcome back! Redirecting to software...");
         setTimeout(() => {
-          const from = searchParams.get("from") || "/";
+          const from = searchParams.get("from") || res.firstAllowedPath || "/";
           router.replace(from);
         }, 500);
       } else {
@@ -290,15 +290,15 @@ function LoginForm() {
             <form onSubmit={handleSignIn} className="space-y-4">
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  Username / Email
+                  Email or Staff Mobile Number
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
                   <input
-                    type="email"
+                    type="text"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="admin@organization.com"
+                    placeholder="official@gmail.com or 10-digit mobile"
                     required
                     className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
                   />
@@ -308,7 +308,7 @@ function LoginForm() {
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                    Password
+                    Password / Staff MPIN
                   </label>
                   <span className="text-[11px] text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer">
                     Forgot?
@@ -320,7 +320,7 @@ function LoginForm() {
                     type={showPassword ? "text" : "password"}
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="Account password or MPIN"
                     required
                     className="w-full text-xs pl-9 pr-9 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
                   />

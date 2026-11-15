@@ -22,7 +22,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default function CategoriesPage() {
-  const { organization, isLoading: authLoading } = useAuth();
+  const { organization, isLoading: authLoading, role, canEdit } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,6 +32,8 @@ export default function CategoriesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const hasEditAccess = role === "owner" || canEdit("/categories");
 
   // Load categories for this organization
   const loadData = async () => {
@@ -156,16 +158,22 @@ export default function CategoriesPage() {
             View Items
             <ArrowRight className="w-3 h-3 text-zinc-400" />
           </Link>
-          <button
-            onClick={() => {
-              setErrorMsg(null);
-              setIsModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
-          >
-            <Plus className="w-4 h-4" />
-            Add Category
-          </button>
+          {hasEditAccess ? (
+            <button
+              onClick={() => {
+                setErrorMsg(null);
+                setIsModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Add Category
+            </button>
+          ) : (
+            <span className="text-xs font-mono text-zinc-400 px-3 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+              View Only
+            </span>
+          )}
         </div>
       </div>
 
@@ -314,18 +322,20 @@ export default function CategoriesPage() {
                       {cat.id}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleDelete(cat.id, cat.name)}
-                        disabled={deletingId === cat.id}
-                        title="Delete category"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
-                      >
-                        {deletingId === cat.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
-                      </button>
+                      {hasEditAccess && (
+                        <button
+                          onClick={() => handleDelete(cat.id, cat.name)}
+                          disabled={deletingId === cat.id}
+                          title="Delete category"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {deletingId === cat.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

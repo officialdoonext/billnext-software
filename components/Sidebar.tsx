@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth/auth-context";
 import {
   LayoutDashboard,
   Receipt,
@@ -13,7 +14,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
-  TrendingUp
+  TrendingUp,
+  ShieldCheck
 } from "lucide-react";
 
 interface SidebarProps {
@@ -27,6 +29,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const pathname = usePathname();
+  const { canView, role, profile } = useAuth();
 
   const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
   const toggleCollapse = controlledToggle !== undefined ? controlledToggle : () => setInternalCollapsed(!internalCollapsed);
@@ -72,7 +75,7 @@ export default function Sidebar({
       name: "Users",
       href: "/users",
       icon: Users,
-      badge: "SOON",
+      badge: null,
     },
   ];
 
@@ -84,6 +87,10 @@ export default function Sidebar({
       badge: null,
     },
   ];
+
+  // Filter navigation items strictly based on role and allowed page permissions
+  const visibleMainNav = mainNavItems.filter((item) => canView(item.href));
+  const visibleSecondaryNav = secondaryNavItems.filter((item) => canView(item.href));
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -98,7 +105,7 @@ export default function Sidebar({
     >
       {/* Top Navigation */}
       <div className="p-2 space-y-1 overflow-y-auto">
-        {mainNavItems.map((item) => {
+        {visibleMainNav.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (
@@ -134,11 +141,13 @@ export default function Sidebar({
           );
         })}
 
-        {/* Subtle Divider */}
-        <div className="my-2 border-t border-zinc-100 dark:border-zinc-800/80" />
+        {/* Subtle Divider (only if secondary nav has items) */}
+        {visibleSecondaryNav.length > 0 && (
+          <div className="my-2 border-t border-zinc-100 dark:border-zinc-800/80" />
+        )}
 
         {/* Secondary Navigation (Settings) */}
-        {secondaryNavItems.map((item) => {
+        {visibleSecondaryNav.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (
@@ -179,11 +188,23 @@ export default function Sidebar({
       <div className="p-2 border-t border-zinc-100 dark:border-zinc-800/80 space-y-2">
         {!isCollapsed && (
           <div className="px-2.5 py-2 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 text-[11px] text-zinc-500 dark:text-zinc-400 flex items-start gap-2">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-            <div className="leading-tight">
-              <span className="font-medium text-zinc-800 dark:text-zinc-200">Bill Next v0.1</span>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">All modules in preview mode</p>
-            </div>
+            {role === "staff" ? (
+              <>
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                <div className="leading-tight">
+                  <span className="font-medium text-zinc-800 dark:text-zinc-200">Staff Account</span>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">{profile?.username || "Sub-user"} · Role Protected</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                <div className="leading-tight">
+                  <span className="font-medium text-zinc-800 dark:text-zinc-200">Bill Next v0.1</span>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">Admin · Full Access</p>
+                </div>
+              </>
+            )}
           </div>
         )}
 

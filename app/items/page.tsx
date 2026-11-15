@@ -37,12 +37,14 @@ import {
 export const dynamic = "force-dynamic";
 
 export default function ItemsPage() {
-  const { organization, isLoading: authLoading } = useAuth();
+  const { organization, isLoading: authLoading, role, canEdit } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("all");
+
+  const hasEditAccess = role === "owner" || canEdit("/items");
 
   // Notifications
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -434,32 +436,41 @@ export default function ItemsPage() {
             <span className="hidden md:inline">Download</span> Excel Template
           </button>
 
-          {/* Bulk Upload Modal Trigger */}
-          <button
-            onClick={() => {
-              setErrorMsg(null);
-              setIsBulkModalOpen(true);
-            }}
-            disabled={isLimitReached}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-            Bulk Upload
-          </button>
+          {/* Bulk Upload & Add Item Buttons (Hidden if View-Only) */}
+          {hasEditAccess ? (
+            <>
+              {/* Bulk Upload Modal Trigger */}
+              <button
+                onClick={() => {
+                  setErrorMsg(null);
+                  setIsBulkModalOpen(true);
+                }}
+                disabled={isLimitReached}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                Bulk Upload
+              </button>
 
-          {/* Add Item Modal Trigger */}
-          <button
-            onClick={() => {
-              setErrorMsg(null);
-              resetAddForm();
-              setIsAddModalOpen(true);
-            }}
-            disabled={isLimitReached}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus className="w-4 h-4" />
-            Add Item
-          </button>
+              {/* Add Item Modal Trigger */}
+              <button
+                onClick={() => {
+                  setErrorMsg(null);
+                  resetAddForm();
+                  setIsAddModalOpen(true);
+                }}
+                disabled={isLimitReached}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Add Item
+              </button>
+            </>
+          ) : (
+            <span className="text-xs font-mono text-zinc-400 px-3 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+              View Only
+            </span>
+          )}
         </div>
       </div>
 
@@ -693,18 +704,20 @@ export default function ItemsPage() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleDeleteItem(item.id, item.name)}
-                        disabled={deletingId === item.id}
-                        title="Delete item"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
-                      >
-                        {deletingId === item.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
-                      </button>
+                      {hasEditAccess && (
+                        <button
+                          onClick={() => handleDeleteItem(item.id, item.name)}
+                          disabled={deletingId === item.id}
+                          title="Delete item"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {deletingId === item.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

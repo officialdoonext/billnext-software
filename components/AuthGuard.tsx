@@ -6,11 +6,12 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { Loader2, Zap } from "lucide-react";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isAllowed, isLoading } = useAuth();
+  const { isAuthenticated, isAllowed, isLoading, role, canView, firstAllowedPath } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   const isPublicPage = pathname.startsWith("/login") || pathname.startsWith("/onboarding");
+  const hasPageAccess = isPublicPage || role === "owner" || canView(pathname);
 
   useEffect(() => {
     if (!isLoading) {
@@ -19,16 +20,19 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           router.replace(`/login?from=${encodeURIComponent(pathname)}`);
         } else if (!isAllowed) {
           router.replace("/onboarding");
+        } else if (role === "staff" && !canView(pathname)) {
+          // Block disallowed URL access and redirect to allowed page
+          router.replace(firstAllowedPath);
         }
       } else if (pathname === "/onboarding" && isAuthenticated && isAllowed) {
         if (typeof document !== "undefined") {
           document.cookie = "billnext_auth=1; path=/; max-age=604800; SameSite=Lax";
           document.cookie = "billnext_allowed=1; path=/; max-age=604800; SameSite=Lax";
         }
-        router.replace("/");
+        router.replace(firstAllowedPath);
       }
     }
-  }, [isLoading, isAuthenticated, isAllowed, isPublicPage, pathname, router]);
+  }, [isLoading, isAuthenticated, isAllowed, isPublicPage, pathname, router, role, canView, firstAllowedPath]);
 
   // If on a public page (login or onboarding), render immediately
   if (isPublicPage) {
@@ -57,8 +61,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If not authenticated or not allowed, render nothing while redirecting
-  if (!isAuthenticated || !isAllowed) {
+  // If not authenticated, not allowed, or role has no access to this URL, render nothing while redirecting
+  if (!isAuthenticated || !isAllowed || !hasPageAccess) {
     return null;
   }
 

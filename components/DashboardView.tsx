@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth/auth-context";
 import {
   Copy,
   Check,
@@ -48,6 +49,7 @@ export default function DashboardView() {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [selectedTimeframe, setSelectedTimeframe] = useState("Last 60 minutes");
   const [isTimeframeOpen, setIsTimeframeOpen] = useState(false);
+  const { canView } = useAuth();
 
   const projectUrl = "https://eknexmgwtljqacsqftlnq.billnext.dev";
 
@@ -452,7 +454,9 @@ export default function DashboardView() {
               href: "/settings",
               icon: Settings,
             },
-          ].map((m) => {
+          ]
+            .filter((m) => canView(m.href))
+            .map((m) => {
             const Icon = m.icon;
             return (
               <Link
@@ -465,7 +469,7 @@ export default function DashboardView() {
                     <Icon className="w-3.5 h-3.5" />
                   </div>
                   <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-medium">
-                    SOON
+                    ACTIVE
                   </span>
                 </div>
                 <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">

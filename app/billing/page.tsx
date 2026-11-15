@@ -40,7 +40,8 @@ import {
 export const dynamic = "force-dynamic";
 
 export default function BillingPage() {
-  const { organization, isLoading: authLoading } = useAuth();
+  const { organization, isLoading: authLoading, role, canEdit } = useAuth();
+  const hasEditAccess = role === "owner" || canEdit("/billing");
 
   // Inventory & Catalog State
   const [items, setItems] = useState<Item[]>([]);
@@ -986,35 +987,42 @@ export default function BillingPage() {
             </div>
 
             {/* 6. Checkout Action Buttons: Draft & Settle */}
-            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={handleSaveDraft}
-                disabled={cartItems.length === 0}
-                className="py-2.5 px-3 text-xs font-semibold rounded-md border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
-              >
-                <Save className="w-3.5 h-3.5" />
-                Draft Bill
-              </button>
+            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+              {!hasEditAccess && (
+                <div className="text-[11px] text-center text-amber-600 dark:text-amber-400 font-mono py-1">
+                  View-Only Mode: Bill settlement requires billing edit permission
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  disabled={cartItems.length === 0 || !hasEditAccess}
+                  className="py-2.5 px-3 text-xs font-semibold rounded-md border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  Draft Bill
+                </button>
 
-              <button
-                type="button"
-                onClick={handleSettleBill}
-                disabled={isSettling || cartItems.length === 0}
-                className="py-2.5 px-3 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 font-sans"
-              >
-                {isSettling ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Settling...
-                  </>
-                ) : (
-                  <>
-                    <Printer className="w-3.5 h-3.5" />
-                    Settle Bill (₹{finalTotal.toFixed(2)})
-                  </>
-                )}
-              </button>
+                <button
+                  type="button"
+                  onClick={handleSettleBill}
+                  disabled={isSettling || cartItems.length === 0 || !hasEditAccess}
+                  className="py-2.5 px-3 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 font-sans cursor-pointer"
+                >
+                  {isSettling ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Settling...
+                    </>
+                  ) : (
+                    <>
+                      <Printer className="w-3.5 h-3.5" />
+                      Settle Bill (₹{finalTotal.toFixed(2)})
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

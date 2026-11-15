@@ -26,7 +26,8 @@ import {
 export const dynamic = "force-dynamic";
 
 export default function SettingsPage() {
-  const { organization, updateOrganization, isLoading: authLoading } = useAuth();
+  const { organization, updateOrganization, isLoading: authLoading, role, canEdit } = useAuth();
+  const hasEditAccess = role === "owner" || canEdit("/settings");
 
   // Tab State
   const [activeTab, setActiveTab] = useState<"profile" | "gst" | "utilities">("profile");
@@ -645,11 +646,16 @@ export default function SettingsPage() {
           )}
 
           {/* Form Actions Footer */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+            {!hasEditAccess ? (
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-mono">
+                View-Only Access: Settings editing requires administrative permissions.
+              </span>
+            ) : <div />}
             <button
               type="submit"
-              disabled={isSaving}
-              className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm disabled:opacity-50 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              disabled={isSaving || !hasEditAccess}
+              className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold rounded-md bg-[#3ECF8E] hover:bg-[#34b27b] text-black shadow-sm disabled:opacity-50 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
             >
               {isSaving ? (
                 <>

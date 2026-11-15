@@ -19,6 +19,64 @@ export interface Organization {
   updated_at?: string;
 }
 
+export type PagePermission = "none" | "view" | "edit";
+
+export type UserPermissions = Record<string, PagePermission>;
+
+export interface AppRouteInfo {
+  path: string;
+  name: string;
+  description: string;
+  icon?: string;
+}
+
+export const APP_ROUTES: AppRouteInfo[] = [
+  { path: "/", name: "Dashboard", description: "Business overview, revenue KPIs, and quick shortcuts" },
+  { path: "/billing", name: "Billing", description: "Point of Sale terminal, catalog, cart, split payments, draft & print" },
+  { path: "/sales", name: "Sales", description: "Sales ledger, bills list with 24 pagination, date range filters & reprint" },
+  { path: "/customers", name: "Customers", description: "Customer directory, phone numbers, and profile ledger" },
+  { path: "/items", name: "Items", description: "Product inventory, pricing, short codes, units, 60KB ImageKit & stock" },
+  { path: "/categories", name: "Item Categories", description: "Department classification and item grouping" },
+  { path: "/users", name: "Users", description: "Staff accounts, mobile login, MPIN credentials & RBAC matrix" },
+  { path: "/settings", name: "Settings", description: "Store profile, ImageKit logo, GST tax slabs, and billing utilities" },
+];
+
+export const ALL_EDIT_PERMISSIONS: UserPermissions = {
+  "/": "edit",
+  "/billing": "edit",
+  "/sales": "edit",
+  "/customers": "edit",
+  "/items": "edit",
+  "/categories": "edit",
+  "/users": "edit",
+  "/settings": "edit",
+};
+
+export const DEFAULT_STAFF_PERMISSIONS: UserPermissions = {
+  "/": "view",
+  "/billing": "edit",
+  "/sales": "view",
+  "/customers": "edit",
+  "/items": "view",
+  "/categories": "none",
+  "/users": "none",
+  "/settings": "none",
+};
+
+export interface OrgUser {
+  id: string;
+  org_id: string;
+  name: string;
+  mobile_number: string;
+  email: string; // ${mobile_number}@bn.com
+  mpin: string; // login password
+  role: "owner" | "staff" | string;
+  permissions: UserPermissions;
+  status: "active" | "inactive" | string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface UserProfile {
   id: string;
   org_id: string;
@@ -26,6 +84,8 @@ export interface UserProfile {
   email: string;
   mobile_number: string;
   role: string;
+  mpin?: string;
+  permissions?: UserPermissions;
   created_at?: string;
 }
 
@@ -116,6 +176,12 @@ export interface AuthContextType {
   } | null;
   profile: UserProfile | null;
   organization: Organization | null;
+  role: string; // 'owner' | 'staff'
+  permissions: UserPermissions;
+  allowedRoutes: AppRouteInfo[];
+  firstAllowedPath: string;
+  canView: (path: string) => boolean;
+  canEdit: (path: string) => boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
   isAllowed: boolean; // status === 'active' && !isExpired
@@ -130,7 +196,7 @@ export interface AuthContextType {
   signIn: (params: {
     email: string;
     password: string;
-  }) => Promise<{ success: boolean; error?: string; isAllowed?: boolean }>;
+  }) => Promise<{ success: boolean; error?: string; isAllowed?: boolean; firstAllowedPath?: string }>;
   signOut: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   updateOrganization: (updates: Partial<Organization>) => Promise<{ success: boolean; error?: string }>;

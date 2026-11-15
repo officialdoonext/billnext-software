@@ -15,9 +15,23 @@ export function proxy(request: NextRequest) {
   // Check auth cookies set during login/signup
   const authCookie = request.cookies.get("billnext_auth")?.value;
   const allowedCookie = request.cookies.get("billnext_allowed")?.value;
+  const roleCookie = request.cookies.get("billnext_role")?.value || "owner";
+  const permsCookie = request.cookies.get("billnext_permissions")?.value;
 
   const isAuthenticated = authCookie === "1";
   const isAllowed = allowedCookie === "1";
+
+  // Helper to resolve staff default redirect
+  const getStaffFirstAllowedPath = (): string => {
+    if (roleCookie === "staff" && permsCookie) {
+      try {
+        const permissions: Record<string, string> = JSON.parse(decodeURIComponent(permsCookie));
+        const routeOrder = ["/billing", "/", "/sales", "/customers", "/items", "/categories", "/users", "/settings"];
+        return routeOrder.find((p) => permissions[p] && permissions[p] !== "none") || "/billing";
+      } catch (e) {}
+    }
+    return "/";
+  };
 
   // 1. If not public and user is not authenticated -> redirect to /login
   if (!isPublicPath) {
@@ -32,25 +46,50 @@ export function proxy(request: NextRequest) {
       const onboardingUrl = new URL("/onboarding", request.url);
       return NextResponse.redirect(onboardingUrl);
     }
+
+    // 3. Granular RBAC URL-level blocking for sub-users/staff
+    // Requirement: "we need to bloc from url level also"
+    if (roleCookie === "staff" && permsCookie) {
+      try {
+        const permissions: Record<string, string> = JSON.parse(decodeURIComponent(permsCookie));
+        const basePath = "/" + (pathname.split("/")[1] || "");
+        const targetKey = basePath === "/" ? "/" : basePath;
+        const pagePermission = permissions[targetKey];
+
+        // Block if page access is 'none' or not permitted
+        if (!pagePermission || pagePermission === "none") {
+          const fallbackPath = getStaffFirstAllowedPath();
+          const deniedUrl = new URL(fallbackPath, request.url);
+          deniedUrl.searchParams.set("access_denied", targetKey);
+          const res = NextResponse.redirect(deniedUrl);
+          res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+          return res;
+        }
+      } catch (err) {
+        console.warn("Middleware permissions check error:", err);
+      }
+    }
   }
 
-  // 3. If user is at /login but already authenticated and allowed -> send to /
+  // 4. If user is at /login but already authenticated and allowed -> send to first allowed route
   if (pathname === "/login" && isAuthenticated && isAllowed) {
-    const res = NextResponse.redirect(new URL("/", request.url));
+    const dest = getStaffFirstAllowedPath();
+    const res = NextResponse.redirect(new URL(dest, request.url));
     res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     return res;
   }
 
-  // 4. If user is at /login and authenticated but NOT allowed -> send to /onboarding
+  // 5. If user is at /login and authenticated but NOT allowed -> send to /onboarding
   if (pathname === "/login" && isAuthenticated && !isAllowed) {
     const res = NextResponse.redirect(new URL("/onboarding", request.url));
     res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     return res;
   }
 
-  // 5. If user is at /onboarding and already authenticated and allowed -> send to /
+  // 6. If user is at /onboarding and already authenticated and allowed -> send to first allowed route
   if (pathname === "/onboarding" && isAuthenticated && isAllowed) {
-    const res = NextResponse.redirect(new URL("/", request.url));
+    const dest = getStaffFirstAllowedPath();
+    const res = NextResponse.redirect(new URL(dest, request.url));
     res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     return res;
   }

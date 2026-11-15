@@ -3,7 +3,17 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import { Organization, UserProfile, AuthContextType } from "./types";
+import {
+  Organization,
+  UserProfile,
+  AuthContextType,
+  APP_ROUTES,
+  AppRouteInfo,
+  UserPermissions,
+  ALL_EDIT_PERMISSIONS,
+  DEFAULT_STAFF_PERMISSIONS,
+} from "./types";
+import { findStaffUserForLogin } from "@/lib/data/users";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -27,14 +37,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Helper to set/delete auth cookie for middleware URL-level blocking
-  const updateAuthCookie = (isAuthed: boolean, isAllowedAccess: boolean) => {
+  const updateAuthCookie = (
+    isAuthed: boolean,
+    isAllowedAccess: boolean,
+    userRole: string = "owner",
+    userPerms?: UserPermissions
+  ) => {
     if (typeof document !== "undefined") {
       if (isAuthed) {
         document.cookie = `billnext_auth=1; path=/; max-age=604800; SameSite=Lax`;
         document.cookie = `billnext_allowed=${isAllowedAccess ? "1" : "0"}; path=/; max-age=604800; SameSite=Lax`;
+        document.cookie = `billnext_role=${userRole}; path=/; max-age=604800; SameSite=Lax`;
+        const permsToSave = userPerms || (userRole === "owner" ? ALL_EDIT_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS);
+        document.cookie = `billnext_permissions=${encodeURIComponent(JSON.stringify(permsToSave))}; path=/; max-age=604800; SameSite=Lax`;
       } else {
         document.cookie = "billnext_auth=; path=/; max-age=0; SameSite=Lax";
         document.cookie = "billnext_allowed=; path=/; max-age=0; SameSite=Lax";
+        document.cookie = "billnext_role=; path=/; max-age=0; SameSite=Lax";
+        document.cookie = "billnext_permissions=; path=/; max-age=0; SameSite=Lax";
       }
     }
   };
@@ -105,20 +125,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .maybeSingle();
 
             if (profData) {
+              const userRole = profData.role || "owner";
+              const userPerms = profData.permissions || (userRole === "owner" ? ALL_EDIT_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS);
               const userProf: UserProfile = {
                 id: profData.id,
                 org_id: profData.org_id,
                 username: profData.username || session.user.email || "",
                 email: profData.email || session.user.email || "",
                 mobile_number: profData.mobile_number || "",
-                role: profData.role || "owner",
+                role: userRole,
+                permissions: userPerms,
               };
               setProfile(userProf);
 
               if (profData.organizations) {
                 const orgData: Organization = formatOrg(profData.organizations);
                 setOrganization(orgData);
-                updateAuthCookie(true, checkIsAllowed(orgData));
+                updateAuthCookie(true, checkIsAllowed(orgData), userRole, userPerms);
                 setIsLoading(false);
                 return;
               }
@@ -135,11 +158,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const parsedUser = JSON.parse(storedUser);
           const parsedOrg: Organization = JSON.parse(storedOrg);
           const parsedProf: UserProfile = storedProf ? JSON.parse(storedProf) : null;
+          const userRole = parsedProf?.role || "owner";
+          const userPerms = parsedProf?.permissions || (userRole === "owner" ? ALL_EDIT_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS);
 
           setUser(parsedUser);
           setOrganization(parsedOrg);
           setProfile(parsedProf);
-          updateAuthCookie(true, checkIsAllowed(parsedOrg));
+          updateAuthCookie(true, checkIsAllowed(parsedOrg), userRole, userPerms);
         } else {
           updateAuthCookie(false, false);
         }
@@ -156,9 +181,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Sync auth cookies whenever organization or user changes
   useEffect(() => {
     if (!isLoading) {
-      updateAuthCookie(Boolean(user), checkIsAllowed(organization));
+      const userRole = profile?.role || "owner";
+      const userPerms = profile?.permissions || (userRole === "owner" ? ALL_EDIT_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS);
+      updateAuthCookie(Boolean(user), checkIsAllowed(organization), userRole, userPerms);
     }
-  }, [user, organization, isLoading]);
+  }, [user, organization, profile, isLoading]);
 
   // Sign Up handler
   const signUp = async ({
@@ -331,9 +358,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }: {
     email: string;
     password: string;
-  }): Promise<{ success: boolean; error?: string; isAllowed?: boolean }> => {
+  }): Promise<{ success: boolean; error?: string; isAllowed?: boolean; firstAllowedPath?: string }> => {
     setIsLoading(true);
     try {
+      // 1. First check if user is in users list (Requirement: "in login if they use this first check he is in users list then if he is user then need to show only allowed pages and we need to block from url level also")
+      const staffMatch = await findStaffUserForLogin(email, password);
+      if (staffMatch) {
+        const { staffUser, org } = staffMatch;
+        const allowed = checkIsAllowed(org);
+        if (!allowed) {
+          setIsLoading(false);
+          return {
+            success: false,
+            error: "Software Access Locked: Organization account is inactive or expired. Please contact the administrator.",
+          };
+        }
+
+        const staffProfile: UserProfile = {
+          id: staffUser.id,
+          org_id: staffUser.org_id,
+          username: staffUser.name,
+          email: staffUser.email,
+          mobile_number: staffUser.mobile_number,
+          role: "staff",
+          mpin: staffUser.mpin,
+          permissions: staffUser.permissions,
+        };
+
+        const authUser = { id: staffUser.id, email: staffUser.email };
+        setUser(authUser);
+        setProfile(staffProfile);
+        setOrganization(org);
+
+        updateAuthCookie(true, true, "staff", staffUser.permissions);
+
+        localStorage.setItem(LOCAL_STORAGE_KEY_USER, JSON.stringify(authUser));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(staffProfile));
+        localStorage.setItem(LOCAL_STORAGE_KEY_ORG, JSON.stringify(org));
+
+        const userAllowedRoutes = APP_ROUTES.filter((r) => {
+          const perm = staffUser.permissions[r.path];
+          return perm === "view" || perm === "edit";
+        });
+        const firstRoute = userAllowedRoutes[0]?.path || "/billing";
+
+        setIsLoading(false);
+        return { success: true, isAllowed: true, firstAllowedPath: firstRoute };
+      }
+
+      // 2. Not a staff member: verify organization owner via Supabase
       const configured = isSupabaseConfigured();
 
       if (configured) {
@@ -367,19 +440,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               email: profData.email || email,
               mobile_number: profData.mobile_number || "",
               role: profData.role || "owner",
+              permissions: ALL_EDIT_PERMISSIONS,
             };
 
             setOrganization(orgData);
             setProfile(userProf);
             const allowed = checkIsAllowed(orgData);
-            updateAuthCookie(true, allowed);
+            updateAuthCookie(true, allowed, "owner", ALL_EDIT_PERMISSIONS);
 
             localStorage.setItem(LOCAL_STORAGE_KEY_USER, JSON.stringify(authUser));
             localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(userProf));
             localStorage.setItem(LOCAL_STORAGE_KEY_ORG, JSON.stringify(orgData));
 
             setIsLoading(false);
-            return { success: true, isAllowed: allowed };
+            return { success: true, isAllowed: allowed, firstAllowedPath: "/" };
           }
         }
       }
@@ -394,21 +468,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const parsedOrg: Organization = JSON.parse(storedOrg);
         const parsedProf: UserProfile = storedProf ? JSON.parse(storedProf) : null;
 
-        if (parsedUser.email === email || parsedProf?.username === email) {
+        if (parsedUser.email === email || parsedProf?.username === email || parsedProf?.mobile_number === email) {
           setUser(parsedUser);
           setOrganization(parsedOrg);
           setProfile(parsedProf);
 
           const allowed = checkIsAllowed(parsedOrg);
-          updateAuthCookie(true, allowed);
+          const userRole = parsedProf?.role || "owner";
+          const userPerms = parsedProf?.permissions || (userRole === "owner" ? ALL_EDIT_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS);
+          updateAuthCookie(true, allowed, userRole, userPerms);
           setIsLoading(false);
-          return { success: true, isAllowed: allowed };
+          return { success: true, isAllowed: allowed, firstAllowedPath: "/" };
         }
       }
 
       // If no account found
       setIsLoading(false);
-      return { success: false, error: "Invalid email or password. Please verify your credentials or Sign Up." };
+      return { success: false, error: "Invalid email, mobile number or password. Please verify your credentials." };
     } catch (err: any) {
       setIsLoading(false);
       return { success: false, error: err.message || "Sign in failed." };
@@ -495,12 +571,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const role = profile?.role || "owner";
+  const permissions: UserPermissions =
+    role === "owner"
+      ? ALL_EDIT_PERMISSIONS
+      : profile?.permissions || DEFAULT_STAFF_PERMISSIONS;
+
+  const canView = (targetPath: string): boolean => {
+    if (role === "owner") return true;
+    const basePath = "/" + (targetPath.split("/")[1] || "");
+    const perm = permissions[basePath === "/" ? "/" : basePath];
+    return perm === "view" || perm === "edit";
+  };
+
+  const canEdit = (targetPath: string): boolean => {
+    if (role === "owner") return true;
+    const basePath = "/" + (targetPath.split("/")[1] || "");
+    const perm = permissions[basePath === "/" ? "/" : basePath];
+    return perm === "edit";
+  };
+
+  const allowedRoutes = APP_ROUTES.filter((route) => canView(route.path));
+  const firstAllowedPath = allowedRoutes[0]?.path || "/billing";
+
   return (
     <AuthContext.Provider
       value={{
         user,
         profile,
         organization,
+        role,
+        permissions,
+        allowedRoutes,
+        firstAllowedPath,
+        canView,
+        canEdit,
         isLoading,
         isAuthenticated,
         isAllowed,
