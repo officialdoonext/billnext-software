@@ -26,7 +26,7 @@ export function proxy(request: NextRequest) {
     if (roleCookie === "staff" && permsCookie) {
       try {
         const permissions: Record<string, string> = JSON.parse(decodeURIComponent(permsCookie));
-        const routeOrder = ["/billing", "/", "/sales", "/customers", "/items", "/categories", "/users", "/settings"];
+        const routeOrder = ["/billing", "/", "/sales", "/expenses", "/customers", "/items", "/categories", "/users", "/settings"];
         return routeOrder.find((p) => permissions[p] && permissions[p] !== "none") || "/billing";
       } catch (e) {}
     }

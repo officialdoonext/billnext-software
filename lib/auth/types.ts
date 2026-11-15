@@ -34,6 +34,7 @@ export const APP_ROUTES: AppRouteInfo[] = [
   { path: "/", name: "Dashboard", description: "Business overview, revenue KPIs, and quick shortcuts" },
   { path: "/billing", name: "Billing", description: "Point of Sale terminal, catalog, cart, split payments, draft & print" },
   { path: "/sales", name: "Sales", description: "Sales ledger, bills list with 24 pagination, date range filters & reprint" },
+  { path: "/expenses", name: "Expenses", description: "Track business expenses, operational costs & expense categories" },
   { path: "/customers", name: "Customers", description: "Customer directory, phone numbers, and profile ledger" },
   { path: "/items", name: "Items", description: "Product inventory, pricing, short codes, units, 60KB ImageKit & stock" },
   { path: "/categories", name: "Item Categories", description: "Department classification and item grouping" },
@@ -45,6 +46,7 @@ export const ALL_EDIT_PERMISSIONS: UserPermissions = {
   "/": "edit",
   "/billing": "edit",
   "/sales": "edit",
+  "/expenses": "edit",
   "/customers": "edit",
   "/items": "edit",
   "/categories": "edit",
@@ -56,6 +58,7 @@ export const DEFAULT_STAFF_PERMISSIONS: UserPermissions = {
   "/": "view",
   "/billing": "edit",
   "/sales": "view",
+  "/expenses": "none",
   "/customers": "edit",
   "/items": "view",
   "/categories": "none",
@@ -167,6 +170,27 @@ export interface DraftBill {
   items: BillItem[];
   total: number;
   saved_at: string;
+}
+
+export interface ExpenseCategory {
+  id: string;
+  org_id: string;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Expense {
+  id: string;
+  org_id: string;
+  name: string;
+  category_id?: string | null;
+  category_name?: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AuthContextType {

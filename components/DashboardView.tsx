@@ -1,486 +1,716 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/auth-context";
+import { Bill, Expense, ExpenseCategory } from "@/lib/auth/types";
+import { fetchBills } from "@/lib/data/bills";
+import { fetchExpenses, fetchExpenseCategories } from "@/lib/data/expenses";
 import {
-  Copy,
-  Check,
-  ChevronDown,
-  Loader2,
-  Cpu,
-  GitBranch,
-  Database,
-  Archive,
-  Network,
-  Globe2,
-  GripVertical,
-  Activity,
-  ArrowRight,
+  RevenueExpenseBarChart,
+  RevenueAreaChart,
+  DonutPieChart,
+  FinancialProgressMeters,
+  BarDataPoint,
+  TrendPoint,
+  DonutSegment,
+} from "./DashboardCharts";
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
   Receipt,
+  Wallet,
+  ArrowRight,
+  Calendar,
+  Layers,
+  Percent,
+  QrCode,
+  Banknote,
+  CreditCard,
+  Building2,
   Package,
   FolderTree,
   Users,
   Settings,
   Sparkles,
-  TrendingUp
+  Loader2,
+  RefreshCw,
+  Clock,
+  CheckCircle2,
+  ShieldCheck,
+  ChevronDown,
+  ChevronRight,
+  Filter
 } from "lucide-react";
 
-function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      stroke="currentColor"
-      strokeWidth="2"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-      <path d="M9 18c-4.51 2-5-2-7-2" />
-    </svg>
-  );
-}
+export type DateFilterType =
+  | "today"
+  | "yesterday"
+  | "this_week"
+  | "last_week"
+  | "this_month"
+  | "last_month"
+  | "this_year"
+  | "last_year"
+  | "custom";
 
 export default function DashboardView() {
-  const [copiedUrl, setCopiedUrl] = useState(false);
-  const [selectedTimeframe, setSelectedTimeframe] = useState("Last 60 minutes");
-  const [isTimeframeOpen, setIsTimeframeOpen] = useState(false);
-  const { canView } = useAuth();
+  const { organization, isLoading: authLoading, canView, role } = useAuth();
 
-  const projectUrl = "https://eknexmgwtljqacsqftlnq.billnext.dev";
+  // Date Filter State (default: today)
+  const [dateFilter, setDateFilter] = useState<DateFilterType>("today");
+  const [customFromDate, setCustomFromDate] = useState("");
+  const [customToDate, setCustomToDate] = useState("");
 
-  const handleCopyUrl = () => {
-    navigator.clipboard.writeText(projectUrl);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2000);
+  // Data States
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Compute ISO Range for Date Filter
+  const getDateRange = (filter: DateFilterType) => {
+    const now = new Date();
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+    switch (filter) {
+      case "today": {
+        return { fromDate: startOfDay(now).toISOString(), toDate: endOfDay(now).toISOString() };
+      }
+      case "yesterday": {
+        const y = new Date(now);
+        y.setDate(y.getDate() - 1);
+        return { fromDate: startOfDay(y).toISOString(), toDate: endOfDay(y).toISOString() };
+      }
+      case "this_week": {
+        const d = new Date(now);
+        const day = d.getDay(); // 0 is Sunday
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+        const monday = new Date(d.setDate(diff));
+        return { fromDate: startOfDay(monday).toISOString(), toDate: endOfDay(now).toISOString() };
+      }
+      case "last_week": {
+        const d = new Date(now);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1) - 7;
+        const lastMonday = new Date(d.setDate(diff));
+        const lastSunday = new Date(lastMonday);
+        lastSunday.setDate(lastMonday.getDate() + 6);
+        return { fromDate: startOfDay(lastMonday).toISOString(), toDate: endOfDay(lastSunday).toISOString() };
+      }
+      case "this_month": {
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { fromDate: startOfDay(firstDay).toISOString(), toDate: endOfDay(now).toISOString() };
+      }
+      case "last_month": {
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+        return {
+          fromDate: startOfDay(firstDayLastMonth).toISOString(),
+          toDate: endOfDay(lastDayLastMonth).toISOString(),
+        };
+      }
+      case "this_year": {
+        const firstDayYear = new Date(now.getFullYear(), 0, 1);
+        return { fromDate: startOfDay(firstDayYear).toISOString(), toDate: endOfDay(now).toISOString() };
+      }
+      case "last_year": {
+        const firstDayLastYear = new Date(now.getFullYear() - 1, 0, 1);
+        const lastDayLastYear = new Date(now.getFullYear() - 1, 11, 31);
+        return {
+          fromDate: startOfDay(firstDayLastYear).toISOString(),
+          toDate: endOfDay(lastDayLastYear).toISOString(),
+        };
+      }
+      case "custom": {
+        const from = customFromDate ? startOfDay(new Date(customFromDate)).toISOString() : undefined;
+        const to = customToDate ? endOfDay(new Date(customToDate)).toISOString() : undefined;
+        return { fromDate: from, toDate: to };
+      }
+      default:
+        return {};
+    }
   };
 
-  const timeframes = ["Last 60 minutes", "Last 24 hours", "Last 7 days", "Last 30 days"];
+  // Load Dashboard Data (Bills + Expenses + Expense Categories)
+  const loadDashboardData = async () => {
+    if (!organization?.id) return;
+    setIsLoading(true);
+
+    try {
+      const range = getDateRange(dateFilter);
+      const [billsRes, expList, catList] = await Promise.all([
+        fetchBills(organization.id, {
+          fromDate: range.fromDate,
+          toDate: range.toDate,
+          limit: 1000,
+        }),
+        fetchExpenses(organization.id, {
+          fromDate: range.fromDate ? range.fromDate.split("T")[0] : undefined,
+          toDate: range.toDate ? range.toDate.split("T")[0] : undefined,
+        }),
+        fetchExpenseCategories(organization.id),
+      ]);
+
+      setBills(billsRes.bills || []);
+      setExpenses(expList || []);
+      setCategories(catList || []);
+    } catch (err) {
+      console.error("Dashboard data load error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (organization?.id) {
+      loadDashboardData();
+    } else if (!authLoading) {
+      setIsLoading(false);
+    }
+  }, [organization?.id, dateFilter, customFromDate, customToDate, authLoading]);
+
+  // =========================================================================
+  // FINANCIAL CALCULATIONS (REVENUE, EXPENSES, PROFIT/LOSS, TENDERS, GST)
+  // =========================================================================
+  const totalRevenue = useMemo(() => {
+    return bills.reduce((acc, curr) => acc + (curr.total_amount || 0), 0);
+  }, [bills]);
+
+  const totalExpenses = useMemo(() => {
+    return expenses.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+  }, [expenses]);
+
+  const netProfitLoss = useMemo(() => {
+    return totalRevenue - totalExpenses;
+  }, [totalRevenue, totalExpenses]);
+
+  const profitLossPercentage = useMemo(() => {
+    if (totalRevenue > 0) {
+      return (netProfitLoss / totalRevenue) * 100;
+    }
+    if (totalExpenses > 0) {
+      return -100;
+    }
+    return 0;
+  }, [netProfitLoss, totalRevenue, totalExpenses]);
+
+  // Payment method breakdowns (including split bills)
+  const paymentBreakdown = useMemo(() => {
+    let upi = 0;
+    let cash = 0;
+    let card = 0;
+
+    bills.forEach((b) => {
+      if (b.payment_method === "UPI") {
+        upi += b.total_amount || 0;
+      } else if (b.payment_method === "CASH") {
+        cash += b.total_amount || 0;
+      } else if (b.payment_method === "CARD") {
+        card += b.total_amount || 0;
+      } else if (b.payment_method === "SPLIT" && b.split_details) {
+        upi += b.split_details.upi || 0;
+        cash += b.split_details.cash || 0;
+        card += b.split_details.card || 0;
+      }
+    });
+
+    return { upi, cash, card, total: upi + cash + card };
+  }, [bills]);
+
+  // Total GST Collected
+  const totalGstCollected = useMemo(() => {
+    return bills.reduce((acc, curr) => acc + (curr.tax_amount || 0), 0);
+  }, [bills]);
+
+  // =========================================================================
+  // CHART DATA PREPARATIONS
+  // =========================================================================
+
+  // 1. Bar Chart Points: Group by sub-intervals (e.g. days or hours)
+  const barChartData: BarDataPoint[] = useMemo(() => {
+    if (dateFilter === "today" || dateFilter === "yesterday") {
+      // 4 Time slots for day: Morning, Noon, Evening, Night
+      const slots = [
+        { label: "Morning (6-12)", revenue: 0, expenses: 0 },
+        { label: "Afternoon (12-16)", revenue: 0, expenses: 0 },
+        { label: "Evening (16-20)", revenue: 0, expenses: 0 },
+        { label: "Night (20-24)", revenue: 0, expenses: 0 },
+      ];
+
+      bills.forEach((b) => {
+        const hour = new Date(b.created_at).getHours();
+        if (hour < 12) slots[0].revenue += b.total_amount;
+        else if (hour < 16) slots[1].revenue += b.total_amount;
+        else if (hour < 20) slots[2].revenue += b.total_amount;
+        else slots[3].revenue += b.total_amount;
+      });
+
+      // Distribute expenses across slots
+      expenses.forEach((e, idx) => {
+        slots[idx % 4].expenses += e.amount;
+      });
+
+      return slots;
+    }
+
+    // Default 7-day interval
+    const daysMap = new Map<string, { label: string; revenue: number; expenses: number }>();
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split("T")[0];
+      daysMap.set(key, { label: `${dayNames[d.getDay()]} ${d.getDate()}`, revenue: 0, expenses: 0 });
+    }
+
+    bills.forEach((b) => {
+      const key = b.created_at.split("T")[0];
+      if (daysMap.has(key)) {
+        daysMap.get(key)!.revenue += b.total_amount;
+      }
+    });
+
+    expenses.forEach((e) => {
+      const key = e.date;
+      if (daysMap.has(key)) {
+        daysMap.get(key)!.expenses += e.amount;
+      }
+    });
+
+    return Array.from(daysMap.values());
+  }, [bills, expenses, dateFilter]);
+
+  // 2. Area Chart Points: Sales trend timeline
+  const areaChartData: TrendPoint[] = useMemo(() => {
+    if (barChartData.length > 0) {
+      return barChartData.map((d) => ({ label: d.label, value: d.revenue }));
+    }
+    return [
+      { label: "Mon", value: 0 },
+      { label: "Tue", value: 0 },
+      { label: "Wed", value: 0 },
+      { label: "Thu", value: 0 },
+      { label: "Fri", value: 0 },
+      { label: "Sat", value: 0 },
+      { label: "Sun", value: 0 },
+    ];
+  }, [barChartData]);
+
+  // 3. Donut Chart 1: Tender Distribution
+  const tenderDonutSegments: DonutSegment[] = useMemo(() => {
+    return [
+      { label: "UPI (Scan & Pay)", value: paymentBreakdown.upi, color: "#3ECF8E", textColor: "text-emerald-500" },
+      { label: "CASH (Currency)", value: paymentBreakdown.cash, color: "#F59E0B", textColor: "text-amber-500" },
+      { label: "CARD (POS Terminal)", value: paymentBreakdown.card, color: "#3B82F6", textColor: "text-blue-500" },
+    ];
+  }, [paymentBreakdown]);
+
+  // 4. Donut Chart 2: Expense Categories Breakdown
+  const expenseCatSegments: DonutSegment[] = useMemo(() => {
+    const catMap = new Map<string, number>();
+    categories.forEach((c) => catMap.set(c.name, 0));
+
+    expenses.forEach((e) => {
+      const catName = e.category_name || "General";
+      catMap.set(catName, (catMap.get(catName) || 0) + e.amount);
+    });
+
+    const colors = ["#EF4444", "#F97316", "#EC4899", "#8B5CF6", "#06B6D4", "#10B981", "#64748B"];
+    return Array.from(catMap.entries())
+      .filter(([_, val]) => val > 0)
+      .map(([name, val], idx) => ({
+        label: name,
+        value: val,
+        color: colors[idx % colors.length],
+        textColor: "text-zinc-600",
+      }));
+  }, [expenses, categories]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Early Access / Coming Soon Notification Banner */}
-      <div className="p-3.5 rounded-lg border border-emerald-200 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-          <span className="font-semibold text-emerald-900 dark:text-emerald-300">
-            Bill Next Platform Setup
-          </span>
-          <span className="text-emerald-700 dark:text-emerald-400">
-            — Core engine online. Billing, Items, Categories, Users, and Settings are in preview (Coming Soon).
-          </span>
+      {/* Top Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/80 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                Executive Financial Dashboard
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                  {organization?.name || "Store Overview"}
+                </span>
+              </h1>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Real-time revenue, expense metrics, profit & loss, tender splits, and interactive charts
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+
+        {/* Quick Shortcut Buttons */}
+        <div className="flex items-center gap-2">
           <Link
             href="/billing"
-            className="text-emerald-800 dark:text-emerald-300 font-medium hover:underline flex items-center gap-1"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            Explore preview pages <ArrowRight className="w-3 h-3" />
+            <Receipt className="w-3.5 h-3.5" />
+            New Bill (POS)
+          </Link>
+          <Link
+            href="/expenses"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Wallet className="w-3.5 h-3.5 text-rose-500" />
+            Record Expense
           </Link>
         </div>
       </div>
 
-      {/* Main Project Header Area */}
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 font-sans">
-          Bill Next
-        </h1>
-
-        {/* Project URL Bar with Copy Button */}
-        <div className="flex items-center gap-2 pt-0.5">
-          <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400 select-all">
-            {projectUrl}
-          </span>
-          <button
-            onClick={handleCopyUrl}
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs font-normal transition-colors cursor-pointer shadow-2xs"
-            title="Copy URL"
-          >
-            {copiedUrl ? (
-              <>
-                <Check className="w-3 h-3 text-emerald-500" />
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied</span>
-              </>
-            ) : (
-              <>
-                <span>Copy</span>
-                <ChevronDown className="w-3 h-3 text-zinc-400" />
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Two-Column Infrastructure Section: Left Grid (6 cards) + Right Dotted Canvas */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: 6 Status Cards (2 columns x 3 rows) */}
-        <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Card 1: STATUS */}
-          <div className="p-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex items-center gap-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="w-10 h-10 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 flex items-center justify-center text-zinc-600 dark:text-zinc-300 shrink-0">
-              <Loader2 className="w-4 h-4 animate-spin text-zinc-700 dark:text-zinc-300" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 font-medium">
-                STATUS
-              </div>
-              <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate mt-0.5">
-                Coming up...
-              </div>
-            </div>
+      {/* ========================================================================= */}
+      {/* DATE RANGE FILTER BAR (Today, Yesterday, This/Last Week, Month, Year, Custom) */}
+      {/* ========================================================================= */}
+      <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+            <Filter className="w-4 h-4 text-emerald-500" />
+            <span>Select Timeframe:</span>
           </div>
 
-          {/* Card 2: COMPUTE SIZE */}
-          <div className="p-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex items-center gap-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="w-10 h-10 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 flex items-center justify-center text-zinc-600 dark:text-zinc-300 shrink-0">
-              <Cpu className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 font-medium">
-                COMPUTE SIZE
-              </div>
-              <div className="mt-1">
-                <span className="text-[10px] font-mono font-medium border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-1.5 py-0.5 rounded">
-                  NANO
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: GITHUB */}
-          <div className="p-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex items-center gap-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="w-10 h-10 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 flex items-center justify-center text-zinc-600 dark:text-zinc-300 shrink-0">
-              <GithubIcon className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 font-medium">
-                GITHUB
-              </div>
-              <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate mt-0.5">
-                Waiting for project...
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: RECENT BRANCH */}
-          <div className="p-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex items-center gap-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="w-10 h-10 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 flex items-center justify-center text-zinc-600 dark:text-zinc-300 shrink-0">
-              <GitBranch className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 font-medium">
-                RECENT BRANCH
-              </div>
-              <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate mt-0.5">
-                No branches
-              </div>
-            </div>
-          </div>
-
-          {/* Card 5: LAST MIGRATION */}
-          <div className="p-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex items-center gap-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="w-10 h-10 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 flex items-center justify-center text-zinc-600 dark:text-zinc-300 shrink-0">
-              <Database className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 font-medium">
-                LAST MIGRATION
-              </div>
-              <div className="w-16 h-3 bg-zinc-200/80 dark:bg-zinc-800 rounded mt-1.5" />
-            </div>
-          </div>
-
-          {/* Card 6: LAST BACKUP */}
-          <div className="p-3.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex items-center gap-3.5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="w-10 h-10 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 flex items-center justify-center text-zinc-600 dark:text-zinc-300 shrink-0">
-              <Archive className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-400 font-medium">
-                LAST BACKUP
-              </div>
-              <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate mt-0.5">
-                No backups
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Dotted Canvas with Database Architecture Node */}
-        <div className="lg:col-span-6 dot-grid border border-zinc-200 dark:border-zinc-800 rounded-xl relative overflow-hidden min-h-[290px] flex items-center justify-center p-6 shadow-2xs">
-          {/* Top-Right Canvas Control Icons */}
-          <div className="absolute top-3 right-3 flex items-center gap-1 border border-zinc-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xs rounded-md p-0.5 shadow-2xs z-10">
-            <button
-              className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-              title="Topology view"
-            >
-              <Network className="w-3.5 h-3.5" />
-            </button>
-            <button
-              className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-              title="Global network"
-            >
-              <Globe2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Architecture Node Card (Singapore Database as in reference image) */}
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-md w-full max-w-[370px] overflow-hidden transition-transform hover:scale-[1.01] duration-150">
-            {/* Top Node Header */}
-            <div className="p-3.5 flex items-center gap-3">
-              {/* Green Database Icon */}
-              <div className="w-9 h-9 rounded-lg bg-[#00C48C] text-white flex items-center justify-center shrink-0 shadow-xs">
-                <Database className="w-5 h-5 fill-white/20" />
-              </div>
-
-              {/* Title & Region */}
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
-                  Primary Database
-                </div>
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 mt-0.5">
-                  <span className="truncate">Southeast Asia (Singapore)</span>
-                  {/* Singapore Flag indicator */}
-                  <span className="text-xs" title="Singapore">
-                    🇸🇬
-                  </span>
-                </div>
-                <div className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
-                  ap-southeast-1 · Nano
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Node Metrics Bar */}
-            <div className="px-3.5 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40 text-[10px] font-mono text-zinc-500 dark:text-zinc-400 flex items-center justify-between">
-              <span>CPU 0%</span>
-              <span>·</span>
-              <span>Disk 0%</span>
-              <span>·</span>
-              <span>RAM 0%</span>
-              <span>·</span>
-              <span className="text-zinc-400">Conns Unavailable</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Metrics Section (5 Total Requests, 80.0% Success Rate) */}
-      <div className="space-y-3 pt-2">
-        {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <GripVertical className="w-4 h-4 text-zinc-300 dark:text-zinc-700 cursor-grab" />
-            <div className="flex items-center gap-2">
-              <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                5 Total Requests
-              </span>
-              <span className="text-base text-zinc-500 dark:text-zinc-400 font-normal">
-                80.0% Success Rate
-              </span>
-            </div>
-          </div>
-
-          {/* Timeframe Dropdown */}
-          <div className="relative self-start sm:self-auto">
-            <button
-              onClick={() => setIsTimeframeOpen(!isTimeframeOpen)}
-              className="flex items-center gap-2 px-2.5 py-1 text-xs font-normal border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors shadow-2xs"
-            >
-              <span>{selectedTimeframe}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-            </button>
-
-            {isTimeframeOpen && (
-              <div className="absolute right-0 mt-1 w-36 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-lg py-1 z-20 text-xs">
-                {timeframes.map((tf) => (
-                  <button
-                    key={tf}
-                    onClick={() => {
-                      setSelectedTimeframe(tf);
-                      setIsTimeframeOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
-                      selectedTimeframe === tf ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    {tf}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 4 Metric Panels in a Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Panel 1: STORAGE */}
-          <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex flex-col justify-between min-h-[110px]">
-            <div className="flex items-center justify-between text-[10px] font-mono">
-              <span className="text-zinc-500 dark:text-zinc-400 font-semibold tracking-wider">
-                STORAGE
-              </span>
-              <div className="flex items-center gap-2 text-zinc-400">
-                <span>• WARNINGS 0</span>
-                <span className="text-rose-500 dark:text-rose-400 font-medium">• ERRORS 1</span>
-              </div>
-            </div>
-            <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-2">
-              3
-            </div>
-            {/* Visual Indicator Bar */}
-            <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-3">
-              <div className="bg-[#3ECF8E] h-full rounded-full" style={{ width: "65%" }} />
-            </div>
-          </div>
-
-          {/* Panel 2: REALTIME */}
-          <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex flex-col justify-between min-h-[110px]">
-            <div className="flex items-center justify-between text-[10px] font-mono">
-              <span className="text-zinc-500 dark:text-zinc-400 font-semibold tracking-wider">
-                REALTIME
-              </span>
-              <div className="flex items-center gap-2 text-zinc-400">
-                <span>• WARNINGS 0</span>
-                <span>• ERRORS 0</span>
-              </div>
-            </div>
-            <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-2">
-              2
-            </div>
-            {/* Visual Indicator Bar */}
-            <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-3">
-              <div className="bg-[#3ECF8E] h-full rounded-full" style={{ width: "40%" }} />
-            </div>
-          </div>
-
-          {/* Panel 3: POSTGRES */}
-          <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex flex-col justify-between min-h-[110px]">
-            <div className="flex items-center justify-between text-[10px] font-mono">
-              <span className="text-zinc-500 dark:text-zinc-400 font-semibold tracking-wider">
-                POSTGRES
-              </span>
-              <div className="flex items-center gap-2 text-zinc-400">
-                <span>• WARNINGS 0</span>
-                <span>• ERRORS 0</span>
-              </div>
-            </div>
-            <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-2">
-              0
-            </div>
-            <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-3">
-              <div className="bg-zinc-300 dark:bg-zinc-700 h-full rounded-full" style={{ width: "0%" }} />
-            </div>
-          </div>
-
-          {/* Panel 4: EDGE FUNCTIONS */}
-          <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-2xs flex flex-col justify-between min-h-[110px]">
-            <div className="flex items-center justify-between text-[10px] font-mono">
-              <span className="text-zinc-500 dark:text-zinc-400 font-semibold tracking-wider">
-                EDGE FUNCTIONS
-              </span>
-              <div className="flex items-center gap-2 text-zinc-400">
-                <span>• WARNINGS 0</span>
-                <span>• ERRORS 0</span>
-              </div>
-            </div>
-            <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-2">
-              0
-            </div>
-            <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-3">
-              <div className="bg-zinc-300 dark:bg-zinc-700 h-full rounded-full" style={{ width: "0%" }} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Modules Quick Navigation / Coming Soon Showcase Grid */}
-      <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-500" />
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Bill Next Modules Overview
-            </h2>
-          </div>
-          <span className="text-xs text-zinc-500">6 modules currently in development</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
-          {[
-            {
-              title: "Billing",
-              desc: "Invoices, tax & POS checkout",
-              href: "/billing",
-              icon: Receipt,
-            },
-            {
-              title: "Sales",
-              desc: "Orders, returns & revenue",
-              href: "/sales",
-              icon: TrendingUp,
-            },
-            {
-              title: "Customers",
-              desc: "Client directory & phone",
-              href: "/customers",
-              icon: Users,
-            },
-            {
-              title: "Items",
-              desc: "Inventory, SKUs & barcodes",
-              href: "/items",
-              icon: Package,
-            },
-            {
-              title: "Item Categories",
-              desc: "Classification & tax slabs",
-              href: "/categories",
-              icon: FolderTree,
-            },
-            {
-              title: "Users",
-              desc: "Cashiers & role permissions",
-              href: "/users",
-              icon: Users,
-            },
-            {
-              title: "Settings",
-              desc: "GST, store profile & keys",
-              href: "/settings",
-              icon: Settings,
-            },
-          ]
-            .filter((m) => canView(m.href))
-            .map((m) => {
-            const Icon = m.icon;
-            return (
-              <Link
-                key={m.href}
-                href={m.href}
-                className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-xs transition-all group"
+          {/* Quick Filter Buttons */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { id: "today", label: "Today" },
+              { id: "yesterday", label: "Yesterday" },
+              { id: "this_week", label: "This Week" },
+              { id: "last_week", label: "Last Week" },
+              { id: "this_month", label: "This Month" },
+              { id: "last_month", label: "Last Month" },
+              { id: "this_year", label: "This Year" },
+              { id: "last_year", label: "Last Year" },
+              { id: "custom", label: "Custom Range" },
+            ].map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setDateFilter(f.id as DateFilterType)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  dateFilter === f.id
+                    ? "bg-[#3ECF8E] text-black font-semibold shadow-xs"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-7 h-7 rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-700 flex items-center justify-center text-zinc-600 dark:text-zinc-300 group-hover:text-emerald-500">
-                    <Icon className="w-3.5 h-3.5" />
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom Date Range Picker Strip */}
+        {dateFilter === "custom" && (
+          <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center gap-3 text-xs animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-500 font-mono text-[11px]">FROM:</span>
+              <input
+                type="date"
+                value={customFromDate}
+                onChange={(e) => setCustomFromDate(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-mono rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-500 font-mono text-[11px]">TO:</span>
+              <input
+                type="date"
+                value={customToDate}
+                onChange={(e) => setCustomToDate(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-mono rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            <button
+              onClick={loadDashboardData}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+            >
+              Apply Filter
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 5 MAIN FINANCIAL METRIC CARDS (REVENUE, EXPENSES, PROFIT/LOSS, TENDERS, GST) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Card 1: Total Revenue */}
+        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-medium">TOTAL REVENUE</span>
+            <div className="w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600">
+              <TrendingUp className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-xl font-bold font-mono text-zinc-900 dark:text-zinc-100">
+            ₹{totalRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          </div>
+          <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            {bills.length} invoices settled
+          </div>
+        </div>
+
+        {/* Card 2: Total Expenses */}
+        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-medium">TOTAL EXPENSES</span>
+            <div className="w-6 h-6 rounded-md bg-rose-50 dark:bg-rose-950/60 flex items-center justify-center text-rose-600">
+              <TrendingDown className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-xl font-bold font-mono text-zinc-900 dark:text-zinc-100">
+            ₹{totalExpenses.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          </div>
+          <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            {expenses.length} expense vouchers
+          </div>
+        </div>
+
+        {/* Card 3: Net Profit / Loss */}
+        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-medium">NET PROFIT / LOSS</span>
+            <span
+              className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-semibold ${
+                netProfitLoss >= 0
+                  ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                  : "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800"
+              }`}
+            >
+              {profitLossPercentage >= 0 ? `+${profitLossPercentage.toFixed(1)}%` : `${profitLossPercentage.toFixed(1)}%`}
+            </span>
+          </div>
+          <div
+            className={`text-xl font-bold font-mono ${
+              netProfitLoss >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+            }`}
+          >
+            {netProfitLoss >= 0 ? "+" : ""}₹{netProfitLoss.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          </div>
+          <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            {netProfitLoss >= 0 ? "Net Surplus / Margin" : "Operational Deficit"}
+          </div>
+        </div>
+
+        {/* Card 4: Tenders Split (UPI, Cash, Card) */}
+        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-medium">TENDER SPLIT</span>
+            <Layers className="w-4 h-4 text-blue-500" />
+          </div>
+          <div className="space-y-1 pt-0.5">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-zinc-500 flex items-center gap-1">
+                <QrCode className="w-3 h-3 text-emerald-500" /> UPI:
+              </span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">₹{paymentBreakdown.upi.toFixed(0)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-zinc-500 flex items-center gap-1">
+                <Banknote className="w-3 h-3 text-amber-500" /> CASH:
+              </span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">₹{paymentBreakdown.cash.toFixed(0)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-zinc-500 flex items-center gap-1">
+                <CreditCard className="w-3 h-3 text-blue-500" /> CARD:
+              </span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">₹{paymentBreakdown.card.toFixed(0)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: GST Collected */}
+        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-zinc-400">
+            <span className="text-[11px] font-mono uppercase tracking-wider font-medium">GST COLLECTED</span>
+            <div className="w-6 h-6 rounded-md bg-purple-50 dark:bg-purple-950/60 flex items-center justify-center text-purple-600">
+              <Percent className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-xl font-bold font-mono text-zinc-900 dark:text-zinc-100">
+            ₹{totalGstCollected.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          </div>
+          <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            CGST + SGST tax output
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* GRAPHS ROW 1: BAR CHART (REV VS EXP) & AREA GRAPH (SALES TREND)           */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Bar Chart Container */}
+        <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs">
+          <RevenueExpenseBarChart data={barChartData} />
+        </div>
+
+        {/* Area Graph Container */}
+        <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs">
+          <RevenueAreaChart data={areaChartData} />
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* GRAPHS ROW 2: PIE / DONUT CHARTS & PROGRESS METERS                        */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Donut Chart 1: Payment Method Breakdown */}
+        <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+              Payment Tenders Share (Donut)
+            </h3>
+            <span className="text-[10px] font-mono text-zinc-400">Total ₹{paymentBreakdown.total.toFixed(0)}</span>
+          </div>
+          <DonutPieChart
+            segments={tenderDonutSegments}
+            centerTitle={`₹${paymentBreakdown.total.toFixed(0)}`}
+            centerSubtitle="Collected"
+          />
+        </div>
+
+        {/* Donut Chart 2: Expense Category Share */}
+        <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+              Expense Categories (Pie/Donut)
+            </h3>
+            <span className="text-[10px] font-mono text-zinc-400">{expenses.length} Vouchers</span>
+          </div>
+          {expenseCatSegments.length > 0 ? (
+            <DonutPieChart
+              segments={expenseCatSegments}
+              centerTitle={`₹${totalExpenses.toFixed(0)}`}
+              centerSubtitle="Expenses"
+            />
+          ) : (
+            <div className="h-44 flex flex-col items-center justify-center text-center text-zinc-400 text-xs">
+              <Wallet className="w-6 h-6 mb-1 text-zinc-300" />
+              <span>No expenses in selected date range</span>
+            </div>
+          )}
+        </div>
+
+        {/* Progress Gauges & Multi-Bar Meters */}
+        <div className="space-y-4">
+          <FinancialProgressMeters
+            revenue={totalRevenue}
+            expenses={totalExpenses}
+            profit={netProfitLoss}
+            profitMargin={profitLossPercentage}
+            upi={paymentBreakdown.upi}
+            cash={paymentBreakdown.cash}
+            card={paymentBreakdown.card}
+            gstAmount={totalGstCollected}
+          />
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* BOTTOM SECTION: RECENT SETTLED BILLS LIST & QUICK SHORTCUTS               */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Bills (2/3 width) */}
+        <div className="lg:col-span-2 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-emerald-500" />
+              <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                Recent Invoices ({bills.slice(0, 5).length} of {bills.length})
+              </h3>
+            </div>
+            <Link
+              href="/sales"
+              className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+            >
+              View Sales Ledger <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          {bills.length === 0 ? (
+            <div className="py-10 text-center text-zinc-400 text-xs">
+              No bills found for the selected timeframe.
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {bills.slice(0, 5).map((b) => (
+                <div key={b.id} className="py-2.5 flex items-center justify-between text-xs">
+                  <div>
+                    <div className="font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
+                      {b.bill_number}
+                    </div>
+                    <div className="text-[11px] text-zinc-400">
+                      {b.customer_name || "Walk-in Customer"} &bull;{" "}
+                      {new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </div>
                   </div>
-                  <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-medium">
-                    ACTIVE
-                  </span>
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                      ₹{b.total_amount.toFixed(2)}
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                      {b.payment_method}
+                    </span>
+                  </div>
                 </div>
-                <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                  {m.title}
-                </div>
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1 mt-0.5">
-                  {m.desc}
-                </div>
-              </Link>
-            );
-          })}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Quick Module Navigation (1/3 width) */}
+        <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs space-y-3">
+          <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-500" />
+            Quick Navigation
+          </h3>
+
+          <div className="space-y-1.5">
+            {[
+              { title: "Point of Sale (POS)", href: "/billing", icon: Receipt, badge: "POS" },
+              { title: "Sales Invoices", href: "/sales", icon: TrendingUp, badge: "Ledger" },
+              { title: "Expenses & Petty Cash", href: "/expenses", icon: Wallet, badge: "Costs" },
+              { title: "Products & Stock", href: "/items", icon: Package, badge: "Catalog" },
+              { title: "Item Categories", href: "/categories", icon: FolderTree, badge: "Tax Slabs" },
+              { title: "Customer Ledger", href: "/customers", icon: Users, badge: "CRM" },
+              { title: "Users & RBAC", href: "/users", icon: Users, badge: "Staff" },
+              { title: "Settings & GST", href: "/settings", icon: Settings, badge: "Config" },
+            ]
+              .filter((m) => canView(m.href))
+              .map((mod) => {
+                const Icon = mod.icon;
+                return (
+                  <Link
+                    key={mod.href}
+                    href={mod.href}
+                    className="p-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/80 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 transition-all flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Icon className="w-4 h-4 text-zinc-400 group-hover:text-emerald-500 transition-colors" />
+                      <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                        {mod.title}
+                      </span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                );
+              })}
+          </div>
         </div>
       </div>
     </div>

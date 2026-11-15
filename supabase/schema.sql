@@ -123,7 +123,29 @@ create table if not exists public.org_users (
   updated_at timestamptz not null default now()
 );
 
--- 8. Enable Row Level Security (RLS) on all tables
+-- 8. Create Expense Categories Table (Organization-Specific)
+create table if not exists public.expense_categories (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- 9. Create Expenses Table (Organization-Specific)
+create table if not exists public.expenses (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  category_id uuid references public.expense_categories(id) on delete set null,
+  amount numeric(12, 2) not null default 0.00,
+  date date not null default current_date,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- 10. Enable Row Level Security (RLS) on all tables
 alter table public.organizations enable row level security;
 alter table public.user_profiles enable row level security;
 alter table public.categories enable row level security;
@@ -131,8 +153,10 @@ alter table public.items enable row level security;
 alter table public.customers enable row level security;
 alter table public.bills enable row level security;
 alter table public.org_users enable row level security;
+alter table public.expense_categories enable row level security;
+alter table public.expenses enable row level security;
 
--- 9. Clean up previous policies to prevent duplicates
+-- 11. Clean up previous policies to prevent duplicates
 drop policy if exists "Allow all on organizations" on public.organizations;
 drop policy if exists "Allow all on user_profiles" on public.user_profiles;
 drop policy if exists "Allow all on categories" on public.categories;
@@ -140,8 +164,10 @@ drop policy if exists "Allow all on items" on public.items;
 drop policy if exists "Allow all on customers" on public.customers;
 drop policy if exists "Allow all on bills" on public.bills;
 drop policy if exists "Allow all on org_users" on public.org_users;
+drop policy if exists "Allow all on expense_categories" on public.expense_categories;
+drop policy if exists "Allow all on expenses" on public.expenses;
 
--- 10. Create Permissive Policies (All queries filter by org_id on frontend/backend)
+-- 12. Create Permissive Policies (All queries filter by org_id on frontend/backend)
 create policy "Allow all on organizations" on public.organizations for all using (true) with check (true);
 create policy "Allow all on user_profiles" on public.user_profiles for all using (true) with check (true);
 create policy "Allow all on categories" on public.categories for all using (true) with check (true);
@@ -149,8 +175,10 @@ create policy "Allow all on items" on public.items for all using (true) with che
 create policy "Allow all on customers" on public.customers for all using (true) with check (true);
 create policy "Allow all on bills" on public.bills for all using (true) with check (true);
 create policy "Allow all on org_users" on public.org_users for all using (true) with check (true);
+create policy "Allow all on expense_categories" on public.expense_categories for all using (true) with check (true);
+create policy "Allow all on expenses" on public.expenses for all using (true) with check (true);
 
--- 11. AUTOMATIC DATABASE TRIGGER on auth.users
+-- 13. AUTOMATIC DATABASE TRIGGER on auth.users
 create or replace function public.handle_new_user()
 returns trigger as $$
 declare

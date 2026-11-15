@@ -14,7 +14,8 @@ import {
   ArrowRight,
   ExternalLink,
   Zap,
-  TrendingUp
+  TrendingUp,
+  Wallet
 } from "lucide-react";
 
 interface SearchModalProps {
@@ -51,6 +52,14 @@ export default function SearchModal({ isOpen, onClose }: SearchModalProps) {
       href: "/sales",
       icon: TrendingUp,
       category: "Transactions",
+      status: "Active",
+    },
+    {
+      title: "Expenses",
+      subtitle: "Operating expenses, vendor payments, daily store costs & expense categories",
+      href: "/expenses",
+      icon: Wallet,
+      category: "Finance",
       status: "Active",
     },
     {
