@@ -9,6 +9,7 @@ import { fetchCategories, addCategory } from "@/lib/data/categories";
 import { compressImageTo60KB } from "@/lib/utils/image-compressor";
 import { SAMPLE_50_PRODUCTS, SampleProduct } from "@/lib/data/sample-products";
 import { downloadSampleExcelTemplate, parseExcelFile } from "@/lib/utils/excel-handler";
+import CustomDropdown from "@/components/ui/CustomDropdown";
 import {
   Boxes,
   Plus,
@@ -550,18 +551,17 @@ export default function ItemsPage() {
             </div>
 
             {/* Category Filter */}
-            <select
-              value={selectedCategoryFilter}
-              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-              className="py-1.5 px-3 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-700 dark:text-zinc-300"
-            >
-              <option value="all">All Categories ({categories.length})</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <div className="w-56 shrink-0">
+              <CustomDropdown
+                value={selectedCategoryFilter}
+                onChange={setSelectedCategoryFilter}
+                options={[
+                  { value: "all", label: `All Categories (${categories.length})` },
+                  ...categories.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+                size="sm"
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 font-mono">
@@ -852,15 +852,16 @@ export default function ItemsPage() {
                   <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
                     Unit <span className="text-emerald-500">*</span>
                   </label>
-                  <select
+                  <CustomDropdown
                     value={unit}
-                    onChange={(e) => setUnit(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-900 dark:text-zinc-100 font-mono"
-                  >
-                    <option value="Piece">Piece</option>
-                    <option value="KG">KG</option>
-                    <option value="Litre">Litre</option>
-                  </select>
+                    onChange={(val) => setUnit(val as any)}
+                    options={[
+                      { value: "Piece", label: "Piece" },
+                      { value: "KG", label: "KG" },
+                      { value: "Litre", label: "Litre" },
+                    ]}
+                    size="md"
+                  />
                 </div>
               </div>
 
@@ -912,18 +913,16 @@ export default function ItemsPage() {
                   </div>
 
                   {!showInlineCat ? (
-                    <select
+                    <CustomDropdown
                       value={selectedCategoryId}
-                      onChange={(e) => setSelectedCategoryId(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-900 dark:text-zinc-100"
-                    >
-                      <option value="">-- Select Category --</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setSelectedCategoryId}
+                      placeholder="-- Select Category --"
+                      options={[
+                        { value: "", label: "-- None / Select Category --" },
+                        ...categories.map((c) => ({ value: c.id, label: c.name })),
+                      ]}
+                      size="md"
+                    />
                   ) : (
                     <div className="flex items-center gap-1.5">
                       <input

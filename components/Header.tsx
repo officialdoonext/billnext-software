@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/auth-context";
+import { usePrinter } from "@/lib/printer/printer-context";
+import PrinterConnectModal from "@/components/printer/PrinterConnectModal";
 import {
   ChevronsUpDown,
   Box,
@@ -20,7 +22,10 @@ import {
   LogOut,
   ShieldCheck,
   Building2,
-  User
+  User,
+  Printer,
+  Usb,
+  Bluetooth
 } from "lucide-react";
 
 interface HeaderProps {
@@ -29,8 +34,9 @@ interface HeaderProps {
 
 export default function Header({ onOpenSearch }: HeaderProps) {
   const { organization, profile, user, signOut } = useAuth();
+  const { isConnected, connectionType, deviceName } = usePrinter();
   const [isDark, setIsDark] = useState(false);
-  const [copiedConnect, setCopiedConnect] = useState(false);
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
@@ -58,12 +64,6 @@ export default function Header({ onOpenSearch }: HeaderProps) {
       localStorage.setItem("theme", "dark");
       setIsDark(true);
     }
-  };
-
-  const handleConnectClick = () => {
-    navigator.clipboard.writeText("postgresql://postgres:[PASSWORD]@eknexmgwtljqacsqftlnq.supabase.co:5432/postgres");
-    setCopiedConnect(true);
-    setTimeout(() => setCopiedConnect(false), 2000);
   };
 
   const orgDisplayName = organization?.name || "Gama Next";
@@ -130,16 +130,30 @@ export default function Header({ onOpenSearch }: HeaderProps) {
             <ChevronsUpDown className="w-3 h-3 text-zinc-400 ml-0.5" />
           </button>
 
-          {/* Connect Button */}
+          {/* Thermal Printer Connect Button */}
           <button
-            onClick={handleConnectClick}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-medium transition-colors cursor-pointer shrink-0 text-xs ml-1 shadow-xs"
-            title="Copy Supabase connection string"
+            onClick={() => setShowPrinterModal(true)}
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-medium transition-all cursor-pointer shrink-0 ml-1 shadow-xs ${
+              isConnected
+                ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40"
+                : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200"
+            }`}
+            title={
+              isConnected
+                ? `Thermal Printer Connected: ${deviceName || connectionType?.toUpperCase()}`
+                : "Connect USB or Bluetooth Thermal Receipt Printer"
+            }
           >
-            {copiedConnect ? (
+            {isConnected ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-emerald-600 dark:text-emerald-400">Copied</span>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <Printer className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="font-semibold truncate max-w-[110px]">
+                  {deviceName || (connectionType === "usb" ? "USB Printer" : "BT Printer")}
+                </span>
               </>
             ) : (
               <>
@@ -331,6 +345,12 @@ export default function Header({ onOpenSearch }: HeaderProps) {
           </div>
         </div>
       )}
+
+      {/* Hardware Printer Connect Modal */}
+      <PrinterConnectModal
+        isOpen={showPrinterModal}
+        onClose={() => setShowPrinterModal(false)}
+      />
     </>
   );
 }

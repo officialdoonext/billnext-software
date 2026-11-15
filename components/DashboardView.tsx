@@ -43,6 +43,7 @@ import {
   ChevronRight,
   Filter
 } from "lucide-react";
+import CustomDatePicker from "@/components/ui/CustomDatePicker";
 
 export type DateFilterType =
   | "today"
@@ -415,27 +416,31 @@ export default function DashboardView() {
           <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center gap-3 text-xs animate-in fade-in duration-150">
             <div className="flex items-center gap-2">
               <span className="text-zinc-500 font-mono text-[11px]">FROM:</span>
-              <input
-                type="date"
-                value={customFromDate}
-                onChange={(e) => setCustomFromDate(e.target.value)}
-                className="px-2.5 py-1.5 text-xs font-mono rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+              <div className="w-40">
+                <CustomDatePicker
+                  value={customFromDate}
+                  onChange={setCustomFromDate}
+                  size="sm"
+                  placeholder="From date"
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="text-zinc-500 font-mono text-[11px]">TO:</span>
-              <input
-                type="date"
-                value={customToDate}
-                onChange={(e) => setCustomToDate(e.target.value)}
-                className="px-2.5 py-1.5 text-xs font-mono rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+              <div className="w-40">
+                <CustomDatePicker
+                  value={customToDate}
+                  onChange={setCustomToDate}
+                  size="sm"
+                  placeholder="To date"
+                />
+              </div>
             </div>
 
             <button
               onClick={loadDashboardData}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 transition-colors cursor-pointer"
             >
               Apply Filter
             </button>

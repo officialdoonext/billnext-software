@@ -33,6 +33,8 @@ import {
   PieChart
 } from "lucide-react";
 import Link from "next/link";
+import CustomDropdown from "@/components/ui/CustomDropdown";
+import CustomDatePicker from "@/components/ui/CustomDatePicker";
 
 export const dynamic = "force-dynamic";
 
@@ -474,19 +476,16 @@ export default function ExpensesPage() {
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <select
+            <div className="w-56 shrink-0">
+              <CustomDropdown
                 value={selectedCategoryFilter}
-                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                className="text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="all">All Categories ({categories.length})</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedCategoryFilter}
+                options={[
+                  { value: "all", label: `All Categories (${categories.length})` },
+                  ...categories.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+                size="sm"
+              />
             </div>
           </div>
 
@@ -735,17 +734,13 @@ export default function ExpensesPage() {
                     <Plus className="w-3 h-3" /> Add New Category
                   </button>
                 </div>
-                <select
+                <CustomDropdown
                   value={expenseCategoryId}
-                  onChange={(e) => setExpenseCategoryId(e.target.value)}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                >
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setExpenseCategoryId}
+                  placeholder="Select Category"
+                  options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                  size="md"
+                />
               </div>
 
               {/* Amount & Date in 2 columns */}
@@ -775,12 +770,10 @@ export default function ExpensesPage() {
                   <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                     Expense Date <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="date"
+                  <CustomDatePicker
                     value={expenseDate}
-                    onChange={(e) => setExpenseDate(e.target.value)}
-                    required
-                    className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                    onChange={setExpenseDate}
+                    size="md"
                   />
                 </div>
               </div>

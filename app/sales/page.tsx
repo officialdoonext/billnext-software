@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import CustomDropdown from "@/components/ui/CustomDropdown";
+import CustomDatePicker from "@/components/ui/CustomDatePicker";
 import { useAuth } from "@/lib/auth/auth-context";
 import { Bill, BillItem } from "@/lib/auth/types";
 import { fetchBills } from "@/lib/data/bills";
@@ -264,38 +266,45 @@ export default function SalesPage() {
               Period:
             </span>
 
-            <select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as DateFilterType)}
-              className="py-1.5 px-3 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-800 dark:text-zinc-200 font-medium"
-            >
-              <option value="today">Today (Default)</option>
-              <option value="yesterday">Yesterday</option>
-              <option value="this_week">This Week</option>
-              <option value="last_week">Last Week</option>
-              <option value="this_month">This Month</option>
-              <option value="last_month">Last Month</option>
-              <option value="this_year">This Year</option>
-              <option value="last_year">Last Year</option>
-              <option value="custom">Custom Date Range</option>
-            </select>
+            <div className="w-48 shrink-0">
+              <CustomDropdown
+                value={dateFilter}
+                onChange={(val) => setDateFilter(val as DateFilterType)}
+                options={[
+                  { value: "today", label: "Today (Default)" },
+                  { value: "yesterday", label: "Yesterday" },
+                  { value: "this_week", label: "This Week" },
+                  { value: "last_week", label: "Last Week" },
+                  { value: "this_month", label: "This Month" },
+                  { value: "last_month", label: "Last Month" },
+                  { value: "this_year", label: "This Year" },
+                  { value: "last_year", label: "Last Year" },
+                  { value: "custom", label: "Custom Date Range" },
+                ]}
+                size="sm"
+              />
+            </div>
 
             {/* Custom Date Range Pickers (shown when custom is selected) */}
             {dateFilter === "custom" && (
               <div className="flex items-center gap-1.5 text-xs">
-                <input
-                  type="date"
-                  value={customFromDate}
-                  onChange={(e) => setCustomFromDate(e.target.value)}
-                  className="py-1 px-2 text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md"
-                />
+                <div className="w-36">
+                  <CustomDatePicker
+                    value={customFromDate}
+                    onChange={setCustomFromDate}
+                    size="sm"
+                    placeholder="From Date"
+                  />
+                </div>
                 <span className="text-zinc-400 font-mono">&rarr;</span>
-                <input
-                  type="date"
-                  value={customToDate}
-                  onChange={(e) => setCustomToDate(e.target.value)}
-                  className="py-1 px-2 text-xs font-mono bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md"
-                />
+                <div className="w-36">
+                  <CustomDatePicker
+                    value={customToDate}
+                    onChange={setCustomToDate}
+                    size="sm"
+                    placeholder="To Date"
+                  />
+                </div>
               </div>
             )}
           </div>
